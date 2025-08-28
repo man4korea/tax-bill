@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "mcp__desktop-commander__interact_with_process",
+      "mcp__desktop-commander__force_terminate",
+      "mcp__desktop-commander__start_process",
+      "mcp__desktop-commander__write_file",
+      "Bash(move:*)",
+      "Bash(mv:*)",
+      "mcp__desktop-commander__get_file_info",
+      "mcp__desktop-commander__read_file"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
