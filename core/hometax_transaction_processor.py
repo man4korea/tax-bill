@@ -26,7 +26,7 @@ async def process_transaction_details(page, processor, first_row_data, business_
             print("   [ERROR] 동일 사업자번호 데이터가 없습니다.")
             return
             
-        print(f"   📊 처리할 거래 건수: {len(work_rows)}건")
+        print(f"   [DATA] 처리할 거래 건수: {len(work_rows)}건")
         
         # 2. 공급일자 비교 및 변경
         await check_and_update_supply_date(page, work_rows[0])
@@ -102,16 +102,16 @@ def get_same_business_number_rows(processor, business_number):
 async def check_and_update_supply_date(page, first_row):
     """공급일자 비교 및 변경 (년/월 다르면 5회 beep)"""
     try:
-        print("   📅 공급일자 확인 중...")
+        print("   [DATE] 공급일자 확인 중...")
         
         # 엑셀에서 작성일자 가져오기 (여러 가능한 컬럼명 시도)
         excel_date = None
-        date_columns = ['작성일자', '일자', '날짜']
+        date_columns = ['공급일자', '작성일자', '일자', '날짜']
         
         for col in date_columns:
             if col in first_row and pd.notna(first_row[col]):
                 excel_date = first_row[col]
-                print(f"   📊 Excel {col}: {excel_date}")
+                print(f"   [DATA] Excel {col}: {excel_date}")
                 break
         
         if excel_date is None:
@@ -134,7 +134,7 @@ async def check_and_update_supply_date(page, first_row):
         await hometax_date_input.wait_for(state="visible", timeout=5000)
         hometax_date_str = await hometax_date_input.input_value()
         
-        print(f"   🌐 HomeTax 공급일자: {hometax_date_str}")
+        print(f"   [WEB] HomeTax 공급일자: {hometax_date_str}")
         
         # 날짜 비교 (년/월) - HomeTax는 ISO 형식 (YYYY-MM-DD)
         try:
@@ -171,7 +171,7 @@ async def check_and_update_supply_date(page, first_row):
 async def input_transaction_items_basic(page, work_rows):
     """기본 거래 내역 입력 (1-4건)"""
     try:
-        print(f"   📝 기본 거래 내역 입력: {len(work_rows)}건")
+        print(f"   [INPUT] 기본 거래 내역 입력: {len(work_rows)}건")
         
         for i, row_data in enumerate(work_rows, 1):
             await input_single_transaction_item(page, i, row_data)
@@ -186,7 +186,7 @@ async def input_transaction_items_basic(page, work_rows):
 async def input_transaction_items_extended(page, work_rows):
     """확장 거래 내역 입력 (5-16건)"""
     try:
-        print(f"   📝 확장 거래 내역 입력: {len(work_rows)}건")
+        print(f"   [INPUT] 확장 거래 내역 입력: {len(work_rows)}건")
         
         # 5건 이상인 경우 품목추가 버튼 클릭이 필요
         items_to_add = len(work_rows) - 4
@@ -220,7 +220,7 @@ async def input_transaction_items_extended(page, work_rows):
 async def input_single_transaction_item(page, row_idx, row_data):
     """단일 거래 내역 입력 - 사용자 요구사항에 맞는 정확한 selector 사용"""
     try:
-        print(f"   📝 {row_idx}번째 거래 내역 입력 중...")
+        print(f"   [INPUT] {row_idx}번째 거래 내역 입력 중...")
         print(f"      데이터 키들: {list(row_data.keys())}")  # 디버깅용
         
         # 0-based index로 변환 (첫번째는 0, 두번째는 1, ...)
@@ -312,13 +312,24 @@ async def input_single_transaction_item(page, row_idx, row_data):
             await tax_input.fill(tax_amount)
             print(f"      세액: {tax_amount}")
         
-        # 비고
+        # 비고 (안전한 처리 - 1-based 인덱스 사용)
         remarks = str(row_data.get('비고', '')).strip()
         if remarks:
-            remark_input = page.locator(f"#mf_txppWframe_edtRmk{row_idx}")
-            await remark_input.wait_for(state="visible", timeout=3000)
-            await remark_input.clear()
-            await remark_input.fill(remarks)
+            try:
+                # 비고 필드는 1-based 인덱스 사용 (edtRmk1, edtRmk2, ...)
+                remark_input = page.locator(f"#mf_txppWframe_edtRmk{row_idx}")
+                # 필드가 존재하는지 먼저 확인
+                if await remark_input.count() > 0:
+                    await remark_input.wait_for(state="visible", timeout=2000)
+                    await remark_input.clear()
+                    await remark_input.fill(remarks)
+                    print(f"      비고: {remarks}")
+                else:
+                    print(f"      [WARN] 비고{row_idx} 필드가 존재하지 않습니다")
+            except Exception as remark_e:
+                print(f"      [WARN] 비고{row_idx} 입력 실패: {remark_e}")
+        else:
+            print(f"      비고: (빈 값으로 생략)")
         
         print(f"   [OK] {row_idx}번째 거래 내역 입력 완료")
         
@@ -369,9 +380,9 @@ async def finalize_transaction_summary(page, work_rows, processor, business_numb
             check_amount = sum(float(row.get('수표', 0) or 0) for row in work_rows)
             note_amount = sum(float(row.get('어음', 0) or 0) for row in work_rows)
         
-        print(f"   💵 현금: {cash_amount:,.0f}원")
+        print(f"   [CASH] 현금: {cash_amount:,.0f}원")
         print(f"   [FORM] 수표: {check_amount:,.0f}원")
-        print(f"   📝 어음: {note_amount:,.0f}원")
+        print(f"   [INPUT] 어음: {note_amount:,.0f}원")
         
         # 합계 금액 검증 및 외상미수금 계산
         credit_amount = await verify_and_calculate_credit(page, work_rows, cash_amount, check_amount, note_amount)
@@ -400,7 +411,7 @@ async def finalize_transaction_summary(page, work_rows, processor, business_numb
             await credit_input.wait_for(state="visible", timeout=3000)
             await credit_input.clear()
             await credit_input.fill(str(int(credit_amount)))
-            print(f"   💳 외상미수금: {credit_amount:,.0f}원")
+            print(f"   [CREDIT] 외상미수금: {credit_amount:,.0f}원")
         
         # 영수 버튼 클릭
         try:
@@ -506,8 +517,8 @@ async def verify_and_calculate_credit(page, work_rows, cash_amount, check_amount
         
         hometax_total = float(hometax_total_str.replace(",", "") or 0)
         
-        print(f"   📊 실제 합계: {actual_total:,.0f}원")
-        print(f"   🌐 HomeTax 합계: {hometax_total:,.0f}원")
+        print(f"   [DATA] 실제 합계: {actual_total:,.0f}원")
+        print(f"   [WEB] HomeTax 합계: {hometax_total:,.0f}원")
         
         # HomeTax 값을 기준으로 사용 (불일치 검증 제거)
         total_amount = hometax_total
@@ -519,7 +530,7 @@ async def verify_and_calculate_credit(page, work_rows, cash_amount, check_amount
         if payment_total == 0:
             # 현금+수표+어음이 0이면 합계금액 전체를 외상미수금으로
             credit_amount = total_amount
-            print(f"   💳 결제방법이 없으므로 전체 금액을 외상미수금으로: {credit_amount:,.0f}원")
+            print(f"   [CREDIT] 결제방법이 없으므로 전체 금액을 외상미수금으로: {credit_amount:,.0f}원")
         else:
             # 외상미수금 = 총합계 - (현금 + 수표 + 어음)
             credit_amount = total_amount - payment_total
