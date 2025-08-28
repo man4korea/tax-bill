@@ -52,8 +52,12 @@ async def process_transaction_details(page, processor, first_row_data, business_
         await write_to_tax_invoice_sheet(page, processor, work_rows, business_number)
         
         # 7. Q열에 완료 표시
+        # 완료된 각 행에 Q열에 오늘 날짜 기록
+        from datetime import datetime
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        
         for row_data in work_rows:
-            processor.write_completion_to_excel_q_column(row_data['excel_row'], "완료")
+            processor.write_completion_to_excel_q_column(row_data['excel_row'], today_date)
         
         print("   [OK] 거래 내역 입력 프로세스 완료!")
         
@@ -407,21 +411,72 @@ async def finalize_transaction_summary(page, work_rows, processor, business_numb
         except Exception as e:
             print(f"   [WARN] 영수 버튼 클릭 실패: {e}")
         
-        # 발급보류 버튼 클릭 (테스트용)
+        # 발급보류 버튼 클릭 및 Alert 처리
         try:
             await page.wait_for_timeout(1000)  # 1초 대기
+            
+            # 발급보류 버튼 확인 및 클릭
             issue_button = page.locator("#mf_txppWframe_btnIsnRsrv")
             await issue_button.wait_for(state="visible", timeout=3000)
+            
+            print("   [FORM] 발급보류 버튼 클릭 시도...")
+            
+            # Alert 리스너 설정 (발급보류 확인/취소 다이얼로그용)
+            confirm_dialog_handled = False
+            
+            async def handle_confirm_dialog(dialog):
+                nonlocal confirm_dialog_handled
+                print(f"   [ALERT] 발급보류 확인 다이얼로그: {dialog.message}")
+                await dialog.accept()  # 확인 버튼 클릭
+                confirm_dialog_handled = True
+                print("   [OK] 발급보류 확인 다이얼로그 - 확인 클릭")
+            
+            page.once("dialog", handle_confirm_dialog)
+            
+            # 발급보류 버튼 클릭
             await issue_button.click()
             print("   [FORM] 발급보류 버튼 클릭 완료")
             
-            # Alert 처리 (두 번의 alert 예상)
-            await handle_issuance_alerts(page)
+            # 확인 다이얼로그 대기 (최대 5초)
+            wait_time = 0
+            while not confirm_dialog_handled and wait_time < 5:
+                await page.wait_for_timeout(100)
+                wait_time += 0.1
+            
+            if not confirm_dialog_handled:
+                print("   [WARN] 발급보류 확인 다이얼로그가 나타나지 않았습니다.")
+            
+            # 발급보류 성공 Alert 처리
+            await page.wait_for_timeout(1000)  # 잠시 대기
+            
+            success_dialog_handled = False
+            
+            async def handle_success_dialog(dialog):
+                nonlocal success_dialog_handled
+                print(f"   [ALERT] 발급보류 성공 다이얼로그: {dialog.message}")
+                await dialog.accept()  # 확인 버튼 클릭
+                success_dialog_handled = True
+                print("   [OK] 발급보류 성공 다이얼로그 - 확인 클릭")
+            
+            page.once("dialog", handle_success_dialog)
+            
+            # 성공 다이얼로그 대기 (최대 5초)
+            wait_time = 0
+            while not success_dialog_handled and wait_time < 5:
+                await page.wait_for_timeout(100)
+                wait_time += 0.1
+            
+            if not success_dialog_handled:
+                print("   [WARN] 발급보류 성공 다이얼로그가 나타나지 않았습니다.")
+            
+            # 폼 초기화 확인 및 대기
+            await page.wait_for_timeout(2000)  # 폼 클리어 대기
+            print("   [OK] 전자세금계산서 입력 화면 클리어 완료")
             
         except Exception as e:
-            print(f"   [ERROR] 발급보류 버튼 클릭 실패: {e}")
+            print(f"   [ERROR] 발급보류 처리 실패: {e}")
         
-        print("   [OK] 거래 합계 확정 완료")
+        print("   [OK] 거래 합계 확정 및 발급보류 완료")
         
     except Exception as e:
         print(f"   [ERROR] 거래 합계 확정 오류: {e}")
@@ -533,7 +588,7 @@ async def handle_issuance_alerts(page):
 async def clear_form_fields(page):
     """세금계산서 작성 폼의 모든 필드 초기화"""
     try:
-        print("   🔄 폼 필드 초기화 시작...")
+        print("   [CLEAR] 폼 필드 초기화 시작...")
         
         # 거래처 정보 초기화
         fields_to_clear = [
@@ -647,25 +702,55 @@ async def write_to_tax_invoice_sheet(page, processor, work_rows, business_number
     try:
         print("   [FORM] 세금계산서 시트 기록 중...")
         
-        # 필요한 값들 수집
-        supply_date = await page.locator("#mf_txppWframe_calWrtDtTop_input").input_value()
-        company_name = await page.locator("#mf_txppWframe_edtDmnrTnmNmTop").input_value()
-        email_id = await page.locator("#mf_txppWframe_edtDmnrMchrgEmlIdTop").input_value()
-        email_domain = await page.locator("#mf_txppWframe_edtDmnrMchrgEmlDmanTop").input_value()
+        # 필요한 값들 수집 - 여러 방법 시도
+        async def get_field_value(selector, field_name):
+            try:
+                element = page.locator(selector)
+                await element.wait_for(state="visible", timeout=2000)
+                
+                # 먼저 input_value() 시도
+                try:
+                    return await element.input_value()
+                except:
+                    # input_value 실패 시 text_content() 시도
+                    try:
+                        return await element.text_content() or ""
+                    except:
+                        # text_content 실패 시 inner_text() 시도
+                        try:
+                            return await element.inner_text() or ""
+                        except:
+                            # 모두 실패 시 get_attribute('value') 시도
+                            return await element.get_attribute("value") or ""
+            except Exception as e:
+                print(f"   [WARN] {field_name} 필드 값 가져오기 실패: {e}")
+                return ""
+        
+        supply_date = await get_field_value("#mf_txppWframe_calWrtDtTop_input", "공급일자")
+        company_name = await get_field_value("#mf_txppWframe_edtDmnrTnmNmTop", "상호")
+        email_id = await get_field_value("#mf_txppWframe_edtDmnrMchrgEmlIdTop", "이메일ID")
+        email_domain = await get_field_value("#mf_txppWframe_edtDmnrMchrgEmlDmanTop", "이메일도메인")
         
         # 합계 금액들
-        total_supply = await page.locator("#mf_txppWframe_edtSumSplCftHeaderTop").input_value()
-        total_tax = await page.locator("#mf_txppWframe_edtSumTxamtHeaderTop").input_value()
-        total_amount = await page.locator("#mf_txppWframe_edtTotaAmtHeaderTop").input_value()
+        total_supply = await get_field_value("#mf_txppWframe_edtSumSplCftHeaderTop", "공급가액")
+        total_tax = await get_field_value("#mf_txppWframe_edtSumTxamtHeaderTop", "세액")
+        total_amount = await get_field_value("#mf_txppWframe_edtTotaAmtHeaderTop", "합계금액")
         
-        # 품목 정보 생성
+        # 첫 번째 품목 정보 (단일 건일 때 사용)
+        first_item_name = await get_field_value("#mf_txppWframe_genEtxivLsatTop_0_edtLsatNmTop", "첫번째품목명")
+        first_item_spec = await get_field_value("#mf_txppWframe_genEtxivLsatTop_0_edtLsatRszeNmTop", "첫번째규격")
+        first_item_quantity = await get_field_value("#mf_txppWframe_genEtxivLsatTop_0_edtLsatQtyTop", "첫번째수량")
+        
+        # 품목 정보 생성 (홈택스 필드값 우선 사용)
         if len(work_rows) == 1:
-            item_name = work_rows[0].get('품명', '')
-            item_spec = work_rows[0].get('규격', '')
-            item_quantity = work_rows[0].get('수량', '')
+            # 1건인 경우: 홈택스 필드값 사용
+            item_name = first_item_name or work_rows[0].get('품명', '')
+            item_spec = first_item_spec or work_rows[0].get('규격', '')
+            item_quantity = first_item_quantity or work_rows[0].get('수량', '')
         else:
-            first_item = work_rows[0].get('품명', '')
-            item_name = f"{first_item} 외 {len(work_rows)}개 품목"
+            # 여러 건인 경우: "첫번째품목명 외 N개 품목" 형식
+            base_item = first_item_name or work_rows[0].get('품명', '품목')
+            item_name = f"{base_item} 외 {len(work_rows)}개 품목"
             item_spec = ""
             item_quantity = ""
         
@@ -692,8 +777,8 @@ async def write_to_tax_invoice_sheet(page, processor, work_rows, business_number
         # 실제 엑셀 파일에 기록
         processor.write_tax_invoice_data(tax_invoice_data)
         
-        # 🔄 각 셀렉션의 변수값 초기화 - 다음 작업을 위해 필수!
-        await clear_form_fields(page)
+        # 폼 필드는 발급보류 성공 후 자동으로 클리어되므로 별도 초기화 불필요
+        print("   [INFO] 발급보류 성공 후 폼 자동 클리어됨 - 초기화 생략")
         
         print("   [FORM] 세금계산서 시트 기록 및 필드 초기화 완료!")
         
