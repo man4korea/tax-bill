@@ -189,11 +189,65 @@ class TaxInvoiceExcelProcessor:
             print("[ERROR] 엑셀 파일 경로가 없습니다.")
             return False
         
+        print(f"엑셀 Q열에 완료 기록 중: 행 {row_number}, 메시지: {completion_message}")
+        
+        # 방법 1: xlwings를 사용해서 열린 엑셀 파일에 직접 쓰기 시도 (우선순위)
+        try:
+            import xlwings as xw
+            
+            print("   xlwings로 열린 Excel 파일에 직접 기록 시도...")
+            
+            # 현재 열려있는 엑셀 앱에 연결
+            try:
+                app = xw.apps.active
+            except:
+                app = xw.App(visible=True, add_book=False)
+            
+            # 열린 워크북 찾기
+            workbook_name = self.excel_file_path.split("\\")[-1]  # 파일명만 추출
+            wb = None
+            
+            for book in app.books:
+                if book.name == workbook_name:
+                    wb = book
+                    break
+            
+            if wb:
+                # "거래명세표" 시트 선택
+                ws = None
+                for sheet in wb.sheets:
+                    if sheet.name == "거래명세표":
+                        ws = sheet
+                        break
+                
+                if not ws:
+                    ws = wb.sheets[0]  # 첫 번째 시트 사용
+                
+                # Q열(17번째 열)에 완료 메시지 기록
+                try:
+                    ws.range(f"Q{row_number}").value = completion_message
+                    print(f"   [OK] 행 {row_number} Q열에 '{completion_message}' 완료 기록 (xlwings)")
+                    
+                    # 저장
+                    wb.save()
+                    return True
+                    
+                except Exception as e:
+                    print(f"   [WARN] xlwings Q열 작성 실패: {e}")
+            else:
+                print(f"   [WARN] xlwings에서 '{workbook_name}' 파일을 찾을 수 없습니다.")
+                
+        except ImportError:
+            print("   xlwings가 설치되지 않았습니다. openpyxl 방법을 시도합니다...")
+        except Exception as e:
+            print(f"   xlwings 방법 실패: {e}")
+        
+        # 방법 2: openpyxl로 파일 직접 수정 (fallback)
         try:
             from openpyxl import load_workbook
             import time
             
-            print(f"엑셀 Q열에 완료 기록 중: 행 {row_number}, 메시지: {completion_message}")
+            print("   openpyxl로 파일 직접 수정 시도...")
             
             # 파일이 열려있는 경우를 대비해 여러 번 시도
             max_attempts = 3

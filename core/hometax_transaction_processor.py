@@ -18,7 +18,7 @@ from datetime import datetime
 async def process_transaction_details(page, processor, first_row_data, business_number):
     """거래 내역 입력 프로세스 - 10번 루틴에서 호출"""
     try:
-        print("   📋 거래 내역 입력 프로세스 시작")
+        print("   [LIST] 거래 내역 입력 프로세스 시작")
         
         # 1. 동일 사업자번호 행들 가져오기
         work_rows = get_same_business_number_rows(processor, business_number)
@@ -143,7 +143,7 @@ async def check_and_update_supply_date(page, first_row):
         hometax_year_month = f"{hometax_date_obj.year}{hometax_date_obj.month:02d}"
         
         if excel_year_month != hometax_year_month:
-            print(f"   🔔 공급일자 년/월이 다릅니다! Excel: {excel_year_month}, HomeTax: {hometax_year_month}")
+            print(f"   [ALERT] 공급일자 년/월이 다릅니다! Excel: {excel_year_month}, HomeTax: {hometax_year_month}")
             
             # 5회 beep
             for i in range(5):
@@ -366,7 +366,7 @@ async def finalize_transaction_summary(page, work_rows, processor, business_numb
             note_amount = sum(float(row.get('어음', 0) or 0) for row in work_rows)
         
         print(f"   💵 현금: {cash_amount:,.0f}원")
-        print(f"   📄 수표: {check_amount:,.0f}원")
+        print(f"   [FORM] 수표: {check_amount:,.0f}원")
         print(f"   📝 어음: {note_amount:,.0f}원")
         
         # 합계 금액 검증 및 외상미수금 계산
@@ -403,7 +403,7 @@ async def finalize_transaction_summary(page, work_rows, processor, business_numb
             receipt_button = page.locator("#mf_txppWframe_rdoRecApeClCdTop > div.w2radio_item.w2radio_item_1 > label")
             await receipt_button.wait_for(state="visible", timeout=3000)
             await receipt_button.click()
-            print("   📋 영수 버튼 클릭 완료")
+            print("   [LIST] 영수 버튼 클릭 완료")
         except Exception as e:
             print(f"   [WARN] 영수 버튼 클릭 실패: {e}")
         
@@ -413,7 +413,7 @@ async def finalize_transaction_summary(page, work_rows, processor, business_numb
             issue_button = page.locator("#mf_txppWframe_btnIsnRsrv")
             await issue_button.wait_for(state="visible", timeout=3000)
             await issue_button.click()
-            print("   📄 발급보류 버튼 클릭 완료")
+            print("   [FORM] 발급보류 버튼 클릭 완료")
             
             # Alert 처리 (두 번의 alert 예상)
             await handle_issuance_alerts(page)
@@ -482,52 +482,48 @@ async def verify_and_calculate_credit(page, work_rows, cash_amount, check_amount
 
 
 async def handle_issuance_alerts(page):
-    """발행 관련 Alert 처리 - 두 번의 Alert 예상"""
+    """발행 관련 Alert 처리 - 두 번의 Alert 예상 (발급보류 후 처리)"""
     try:
-        print("   🔔 Alert 처리 대기 중...")
+        print("   [ALERT] 발급보류 후 Alert 처리 대기 중...")
         
-        # 첫 번째 Alert 처리
-        try:
-            dialog_event = asyncio.Event()
-            dialog_message = None
-
-            async def handle_first_dialog(dialog):
-                nonlocal dialog_message
-                dialog_message = dialog.message
-                print(f"   📢 첫 번째 Alert 감지: {dialog_message}")
-                await dialog.accept()
-                dialog_event.set()
-
-            page.once("dialog", handle_first_dialog)
-            
-            # 첫 번째 Alert 대기 (최대 5초)
-            await asyncio.wait_for(dialog_event.wait(), timeout=5.0)
-            await page.wait_for_timeout(500)  # 잠시 대기
-            
-        except asyncio.TimeoutError:
-            print("   ℹ️ 첫 번째 Alert 없음")
+        # 발급보류 버튼 클릭 후 잠시 더 대기 (시스템 처리 시간)
+        await page.wait_for_timeout(2000)  # 2초 대기
         
-        # 두 번째 Alert 처리
-        try:
-            dialog_event2 = asyncio.Event()
-            dialog_message2 = None
+        # Alert 처리를 위한 통합 함수
+        async def wait_for_alert(alert_name, timeout_sec):
+            try:
+                dialog_event = asyncio.Event()
+                dialog_message = None
 
-            async def handle_second_dialog(dialog):
-                nonlocal dialog_message2
-                dialog_message2 = dialog.message
-                print(f"   📢 두 번째 Alert 감지: {dialog_message2}")
-                await dialog.accept()
-                dialog_event2.set()
+                async def handle_dialog(dialog):
+                    nonlocal dialog_message
+                    dialog_message = dialog.message
+                    print(f"   [MSG] {alert_name} Alert 감지: {dialog_message}")
+                    await dialog.accept()
+                    dialog_event.set()
 
-            page.once("dialog", handle_second_dialog)
-            
-            # 두 번째 Alert 대기 (최대 3초)
-            await asyncio.wait_for(dialog_event2.wait(), timeout=3.0)
-            print("   [OK] 두 번째 Alert 처리 완료")
-            
-        except asyncio.TimeoutError:
-            print("   ℹ️ 두 번째 Alert 없음")
+                page.once("dialog", handle_dialog)
+                
+                # Alert 대기
+                await asyncio.wait_for(dialog_event.wait(), timeout=timeout_sec)
+                print(f"   [OK] {alert_name} Alert 처리 완료")
+                await page.wait_for_timeout(500)  # Alert 처리 후 잠시 대기
+                return True
+                
+            except asyncio.TimeoutError:
+                print(f"   [INFO] {alert_name} Alert 없음 (timeout: {timeout_sec}초)")
+                return False
         
+        # 첫 번째 Alert 처리 (더 긴 대기 시간)
+        await wait_for_alert("첫 번째", 7.0)
+        
+        # 두 번째 Alert 처리 (첫 번째 Alert 후 나타남)
+        await wait_for_alert("두 번째", 5.0)
+        
+        # 추가 Alert 확인 (혹시나 더 있을 수 있음)
+        await wait_for_alert("추가", 3.0)
+        
+        # 최종 대기
         await page.wait_for_timeout(1000)
         
     except Exception as e:
@@ -649,7 +645,7 @@ async def clear_form_fields(page):
 async def write_to_tax_invoice_sheet(page, processor, work_rows, business_number):
     """세금계산서 시트에 기록"""
     try:
-        print("   📄 세금계산서 시트 기록 중...")
+        print("   [FORM] 세금계산서 시트 기록 중...")
         
         # 필요한 값들 수집
         supply_date = await page.locator("#mf_txppWframe_calWrtDtTop_input").input_value()
@@ -699,7 +695,7 @@ async def write_to_tax_invoice_sheet(page, processor, work_rows, business_number
         # 🔄 각 셀렉션의 변수값 초기화 - 다음 작업을 위해 필수!
         await clear_form_fields(page)
         
-        print("   📄 세금계산서 시트 기록 및 필드 초기화 완료!")
+        print("   [FORM] 세금계산서 시트 기록 및 필드 초기화 완료!")
         
     except Exception as e:
         print(f"   [ERROR] 세금계산서 시트 기록 오류: {e}")

@@ -14,7 +14,8 @@
       "Read(C:\\Users\\man4k/**)",
       "Read(C:\\Users\\man4k/**)",
       "Read(C:\\Users\\man4k/**)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
