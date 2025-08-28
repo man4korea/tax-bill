@@ -9,7 +9,12 @@
       "Bash(move:*)",
       "Bash(mv:*)",
       "mcp__desktop-commander__get_file_info",
-      "mcp__desktop-commander__read_file"
+      "mcp__desktop-commander__read_file",
+      "Read(C:\\Users\\man4k/**)",
+      "Read(C:\\Users\\man4k/**)",
+      "Read(C:\\Users\\man4k/**)",
+      "Read(C:\\Users\\man4k/**)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

@@ -22,7 +22,6 @@ from hometax_transaction_processor import (
     input_single_transaction_item,
     finalize_transaction_summary,
     verify_and_calculate_credit,
-    show_amount_mismatch_dialog,
     handle_issuance_alerts,
     write_to_tax_invoice_sheet,
     clear_form_fields
@@ -31,12 +30,12 @@ from hometax_transaction_processor import (
 async def play_beep(count=1, frequency=800, duration=300):
     """지정된 횟수만큼 Beep음을 재생합니다."""
     try:
-        print(f"      🔊 Beep 알림 {count}회...")
+        print(f"      [BEEP] 알림 {count}회...")
         for i in range(count):
             winsound.Beep(frequency, duration)
             if i < count - 1:
                 await asyncio.sleep(0.2)
-        print("      🔊 Beep 알림 완료")
+        print("      [BEEP] 알림 완료")
     except Exception as beep_error:
         print(f"      Beep 처리 오류: {beep_error}")
 
@@ -121,7 +120,7 @@ class TaxInvoiceExcelProcessor:
     def write_error_to_excel(self, row_number, error_message="error"):
         """엑셀 파일의 지정된 행 발행일 열에 에러 메시지 작성"""
         if not self.excel_file_path:
-            print("❌ 엑셀 파일 경로가 없습니다.")
+            print("[ERROR] 엑셀 파일 경로가 없습니다.")
             return False
         
         try:
@@ -144,17 +143,17 @@ class TaxInvoiceExcelProcessor:
             workbook.save(self.excel_file_path)
             workbook.close()
             
-            print(f"✅ 엑셀 파일에 에러 기록 완료: 행 {row_number}")
+            print(f"[OK] 엑셀 파일에 에러 기록 완료: 행 {row_number}")
             return True
             
         except Exception as e:
-            print(f"❌ 엑셀 파일 에러 기록 실패: {e}")
+            print(f"[ERROR] 엑셀 파일 에러 기록 실패: {e}")
             return False
     
     def write_error_to_excel_q_column(self, row_number, error_message="번호오류"):
         """엑셀 파일의 거래명세표 시트 Q열(발행일)에 에러 메시지 작성 (단일 행)"""
         if not self.excel_file_path:
-            print("❌ 엑셀 파일 경로가 없습니다.")
+            print("[ERROR] 엑셀 파일 경로가 없습니다.")
             return False
         
         try:
@@ -177,17 +176,17 @@ class TaxInvoiceExcelProcessor:
             workbook.save(self.excel_file_path)
             workbook.close()
             
-            print(f"✅ 엑셀 Q열에 에러 기록 완료: 행 {row_number}, Q열: {error_message}")
+            print(f"[OK] 엑셀 Q열에 에러 기록 완료: 행 {row_number}, Q열: {error_message}")
             return True
             
         except Exception as e:
-            print(f"❌ 엑셀 Q열 에러 기록 실패: {e}")
+            print(f"[ERROR] 엑셀 Q열 에러 기록 실패: {e}")
             return False
     
     def write_completion_to_excel_q_column(self, row_number, completion_message="완료"):
         """엑셀 파일의 거래명세표 시트 Q열(발행일)에 완료 메시지 작성 (단일 행)"""
         if not self.excel_file_path:
-            print("❌ 엑셀 파일 경로가 없습니다.")
+            print("[ERROR] 엑셀 파일 경로가 없습니다.")
             return False
         
         try:
@@ -215,20 +214,20 @@ class TaxInvoiceExcelProcessor:
                     workbook.save(self.excel_file_path)
                     workbook.close()
                     
-                    print(f"   ✅ 행 {row_number} Q열에 '{completion_message}' 완료 기록 (openpyxl)")
+                    print(f"   [OK] 행 {row_number} Q열에 '{completion_message}' 완료 기록 (openpyxl)")
                     return True
                     
                 except PermissionError as pe:
                     if attempt < max_attempts - 1:
-                        print(f"   ⚠️ Excel 파일이 사용 중입니다. {attempt + 1}/{max_attempts} 시도 후 재시도...")
+                        print(f"   [WARN] Excel 파일이 사용 중입니다. {attempt + 1}/{max_attempts} 시도 후 재시도...")
                         time.sleep(1)  # 1초 대기 후 재시도
                         continue
                     else:
-                        print(f"   ❌ Excel 파일 권한 오류 (파일이 열려있음): {pe}")
+                        print(f"   [ERROR] Excel 파일 권한 오류 (파일이 열려있음): {pe}")
                         return False
                 except Exception as inner_e:
                     if attempt < max_attempts - 1:
-                        print(f"   ⚠️ Excel 작업 오류, {attempt + 1}/{max_attempts} 재시도 중: {inner_e}")
+                        print(f"   [WARN] Excel 작업 오류, {attempt + 1}/{max_attempts} 재시도 중: {inner_e}")
                         time.sleep(0.5)
                         continue
                     else:
@@ -237,14 +236,14 @@ class TaxInvoiceExcelProcessor:
             return False
             
         except Exception as e:
-            print(f"❌ 엑셀 Q열 완료 기록 실패: {e}")
-            print("   💡 Excel 파일이 다른 프로그램에서 열려있지 않은지 확인해주세요.")
+            print(f"[ERROR] 엑셀 Q열 완료 기록 실패: {e}")
+            print("   [TIP] Excel 파일이 다른 프로그램에서 열려있지 않은지 확인해주세요.")
             return False
     
     def write_error_to_all_matching_business_numbers(self, business_number, error_message="번호오류"):
         """같은 사업자등록번호를 가진 모든 행의 Q열에 에러 메시지 작성"""
         if not self.excel_file_path:
-            print("❌ 엑셀 파일 경로가 없습니다.")
+            print("[ERROR] 엑셀 파일 경로가 없습니다.")
             return False
         
         try:
@@ -270,7 +269,7 @@ class TaxInvoiceExcelProcessor:
                     matching_rows.append(excel_row_number)
             
             if not matching_rows:
-                print(f"❌ 등록번호 {business_number}와 일치하는 행을 찾을 수 없습니다.")
+                print(f"[ERROR] 등록번호 {business_number}와 일치하는 행을 찾을 수 없습니다.")
                 return False
             
             print(f"발견된 일치 행들: {matching_rows} (총 {len(matching_rows)}개)")
@@ -319,7 +318,7 @@ class TaxInvoiceExcelProcessor:
                     # 저장
                     wb.save()
                     
-                    print(f"✅ 등록번호 {business_number}의 모든 행 Q열 에러 기록 완료 (xlwings): {updated_count}/{len(matching_rows)}개 행")
+                    print(f"[OK] 등록번호 {business_number}의 모든 행 Q열 에러 기록 완료 (xlwings): {updated_count}/{len(matching_rows)}개 행")
                     return True
                     
             except ImportError:
@@ -354,24 +353,24 @@ class TaxInvoiceExcelProcessor:
             workbook.save(self.excel_file_path)
             workbook.close()
             
-            print(f"✅ 등록번호 {business_number}의 모든 행 Q열 에러 기록 완료 (openpyxl): {updated_count}/{len(matching_rows)}개 행")
+            print(f"[OK] 등록번호 {business_number}의 모든 행 Q열 에러 기록 완료 (openpyxl): {updated_count}/{len(matching_rows)}개 행")
             return True
             
         except PermissionError as pe:
-            print(f"❌ 파일 권한 오류: {pe}")
-            print("   🔧 해결 방법:")
+            print(f"[ERROR] 파일 권한 오류: {pe}")
+            print("   [FIX] 해결 방법:")
             print("   1. 엑셀 파일이 열려있다면 파일을 닫고 다시 시도하세요")
             print("   2. 또는 xlwings를 설치하세요: pip install xlwings")
             return False
             
         except Exception as e:
-            print(f"❌ 같은 등록번호 모든 행 Q열 에러 기록 실패: {e}")
+            print(f"[ERROR] 같은 등록번호 모든 행 Q열 에러 기록 실패: {e}")
             return False
     
     def write_tax_invoice_data(self, tax_invoice_data):
         """세금계산서 시트에 데이터 기록"""
         if not self.excel_file_path:
-            print("❌ 엑셀 파일 경로가 없습니다.")
+            print("[ERROR] 엑셀 파일 경로가 없습니다.")
             return False
         
         try:
@@ -427,7 +426,7 @@ class TaxInvoiceExcelProcessor:
                     # 저장
                     wb.save()
                     
-                    print(f"✅ 세금계산서 시트에 데이터 기록 완료 (xlwings): 행 {last_row}")
+                    print(f"[OK] 세금계산서 시트에 데이터 기록 완료 (xlwings): 행 {last_row}")
                     return True
                     
             except ImportError:
@@ -469,18 +468,18 @@ class TaxInvoiceExcelProcessor:
             workbook.save(self.excel_file_path)
             workbook.close()
             
-            print(f"✅ 세금계산서 시트에 데이터 기록 완료 (openpyxl): 행 {last_row}")
+            print(f"[OK] 세금계산서 시트에 데이터 기록 완료 (openpyxl): 행 {last_row}")
             return True
             
         except PermissionError as pe:
-            print(f"❌ 파일 권한 오류: {pe}")
-            print("   🔧 해결 방법:")
+            print(f"[ERROR] 파일 권한 오류: {pe}")
+            print("   [FIX] 해결 방법:")
             print("   1. 엑셀 파일이 열려있다면 파일을 닫고 다시 시도하세요")
             print("   2. 또는 xlwings를 설치하세요: pip install xlwings")
             return False
             
         except Exception as e:
-            print(f"❌ 세금계산서 시트 기록 실패: {e}")
+            print(f"[ERROR] 세금계산서 시트 기록 실패: {e}")
             return False
     
     def check_and_open_excel_file(self):
@@ -523,14 +522,14 @@ class TaxInvoiceExcelProcessor:
                         for book in app.books:
                             print(f"   - 확인 중: '{book.name}'")
                             if book.name.lower() == target_filename.lower():
-                                print(f"   ✅ '{book.name}' 파일이 이미 열려있습니다! 중복 열기 방지")
+                                print(f"   [OK] '{book.name}' 파일이 이미 열려있습니다! 중복 열기 방지")
                                 self.excel_file_path = book.fullname
                                 return True
                             elif target_filename.lower().replace('.xlsx', '') in book.name.lower():
                                 print(f"   유사한 파일명 발견: '{book.name}' (읽기 전용일 수 있음)")
                                 # 유사한 파일명도 이미 열려있는 것으로 처리
                                 self.excel_file_path = book.fullname
-                                print(f"   ✅ 유사 파일 사용: '{book.name}' - 중복 열기 방지")
+                                print(f"   [OK] 유사 파일 사용: '{book.name}' - 중복 열기 방지")
                                 return True
                         print(f"   Excel은 실행 중이지만 '{target_filename}' 파일이 열려있지 않습니다.")
                     else:
@@ -557,7 +556,7 @@ class TaxInvoiceExcelProcessor:
                 import psutil
                 excel_processes = [p for p in psutil.process_iter(['pid', 'name']) if 'excel' in p.info['name'].lower()]
                 if excel_processes:
-                    print(f"   ⚠️ Excel이 실행 중입니다. 중복 열기를 방지하기 위해 파일 경로만 저장합니다.")
+                    print(f"   [WARN] Excel이 실행 중입니다. 중복 열기를 방지하기 위해 파일 경로만 저장합니다.")
                     self.excel_file_path = target_file
                     return True
             except:
@@ -611,7 +610,7 @@ class TaxInvoiceExcelProcessor:
                 import psutil
                 excel_processes = [p for p in psutil.process_iter(['pid', 'name']) if 'excel' in p.info['name'].lower()]
                 if excel_processes:
-                    print(f"   ⚠️ Excel이 실행 중입니다. 중복 열기를 방지하기 위해 파일 경로만 저장합니다.")
+                    print(f"   [WARN] Excel이 실행 중입니다. 중복 열기를 방지하기 위해 파일 경로만 저장합니다.")
                     self.excel_file_path = file_path
                     root.destroy()
                     return True
@@ -676,10 +675,10 @@ class TaxInvoiceExcelProcessor:
                         rows.extend(range(start_row, end_row + 1))
                     else:
                         if not silent:
-                            print(f"❌ 잘못된 범위: {part}")
+                            print(f"[ERROR] 잘못된 범위: {part}")
                 except ValueError:
                     if not silent:
-                        print(f"❌ 잘못된 범위: {part}")
+                        print(f"[ERROR] 잘못된 범위: {part}")
             else:
                 # 단일 행 처리
                 try:
@@ -688,10 +687,10 @@ class TaxInvoiceExcelProcessor:
                         rows.append(row)
                     else:
                         if not silent:
-                            print(f"❌ 잘못된 행 번호: {part}")
+                            print(f"[ERROR] 잘못된 행 번호: {part}")
                 except ValueError:
                     if not silent:
-                        print(f"❌ 잘못된 행 번호: {part}")
+                        print(f"[ERROR] 잘못된 행 번호: {part}")
         
         return sorted(set(rows))  # 중복 제거 및 정렬
     
@@ -832,7 +831,7 @@ class TaxInvoiceExcelProcessor:
                     print(f"경고: 행 {row_num}은 데이터 범위를 벗어났습니다.")
                     continue
             
-            print(f"✅ {len(self.selected_data)}개 행의 데이터 추출 완료")
+            print(f"[OK] {len(self.selected_data)}개 행의 데이터 추출 완료")
             return True
         
         return False
@@ -847,7 +846,7 @@ class TaxInvoiceExcelProcessor:
             str(x.get('등록번호', '')).strip()
         )
         
-        print(f"✅ 사업자번호별 정렬 완료: {len(sorted_data)}개 행")
+        print(f"[OK] 사업자번호별 정렬 완료: {len(sorted_data)}개 행")
         
         # 2단계: 사업자번호별로 월 합계 그룹핑 (16건씩 분할)
         groups = []
@@ -875,7 +874,7 @@ class TaxInvoiceExcelProcessor:
             groups.append(current_group)
         
         # 그룹 정보 출력 (월 합계 개념)
-        print(f"✅ 월 합계 세금계산서 그룹핑 완료: {len(groups)}개 세금계산서")
+        print(f"[OK] 월 합계 세금계산서 그룹핑 완료: {len(groups)}개 세금계산서")
         
         # 거래처별 세금계산서 개수 요약
         business_summary = {}
@@ -977,7 +976,7 @@ async def process_selected_rows_sequentially(page, processor):
                 await page.wait_for_timeout(2000)
             
         except Exception as e:
-            print(f"   ❌ [{group_idx}] 거래처 그룹 처리 중 오류: {e}")
+            print(f"   [ERROR] [{group_idx}] 거래처 그룹 처리 중 오류: {e}")
             continue
     
     print(f"\n거래처별 순차 처리 완료!")
@@ -992,7 +991,7 @@ async def process_single_tax_invoice(page, group_data, processor):
         print(f"      사업자번호 검증 시작: {business_number}")
         
         if not business_number:
-            print("❌ 등록번호가 없습니다.")
+            print("[ERROR] 등록번호가 없습니다.")
             for row in group_data:
                 processor.write_error_to_excel_q_column(row['excel_row'], "번호없음")
             return
@@ -1044,10 +1043,10 @@ async def input_transaction_details(page, group_data, processor):
                 processor.write_error_to_excel(row_data.get('excel_row', 0), "명세표 입력 error")
                 continue
         
-        print(f"      ✅ 모든 거래명세표 입력 완료: {len(group_data)}건")
+        print(f"      [OK] 모든 거래명세표 입력 완료: {len(group_data)}건")
         
     except Exception as e:
-        print(f"      ❌ 거래명세표 입력 실패: {e}")
+        print(f"      [ERROR] 거래명세표 입력 실패: {e}")
 
 async def input_transaction_item(page, row_idx, row_data, processor):
     """개별 거래명세표 행 입력"""
@@ -1183,7 +1182,7 @@ async def input_business_number_and_verify(page, business_number, processor, row
                 await play_beep(3)
 
     except Exception as e:
-        print(f"   ❌ 등록번호 검증 중 심각한 오류 발생: {e}")
+        print(f"   [ERROR] 등록번호 검증 중 심각한 오류 발생: {e}")
         processor.write_error_to_all_matching_business_numbers(business_number, "처리오류")
         await play_beep(3)
 
@@ -1220,7 +1219,7 @@ async def input_supply_date(page, supply_date):
         await page.wait_for_timeout(500)
         
     except Exception as e:
-        print(f"   ❌ 공급일자 입력 실패: {e}")
+        print(f"   [ERROR] 공급일자 입력 실패: {e}")
 
 async def auto_process_tax_invoices(page, data_manager):
     """엑셀 데이터를 이용한 세금계산서 자동 처리"""
@@ -1442,9 +1441,9 @@ async def hometax_quick_login():
                 # 먼저 iframe이 존재하는지 확인
                 await page.wait_for_selector("#dscert", timeout=5000)
                 iframe_exists = True
-                print("   ✅ #dscert iframe 발견")
+                print("   [OK] #dscert iframe 발견")
             except:
-                print("   ❌ #dscert iframe 없음")
+                print("   [ERROR] #dscert iframe 없음")
             
             if iframe_exists:
                 # iframe이 존재하면 내용 로딩을 여러 방법으로 시도
@@ -1819,11 +1818,11 @@ async def hometax_quick_login():
                     print("전체 메뉴 네비게이션 완료!")
                     
                 except Exception as nav_error:
-                    print(f"❌ 메뉴 네비게이션 오류: {nav_error}")
+                    print(f"[ERROR] 메뉴 네비게이션 오류: {nav_error}")
                     print("   수동으로 메뉴를 선택해주세요.")
                 
             else:
-                print("⚠️  로그인 상태 확인 필요")
+                print("[WARN]  로그인 상태 확인 필요")
                 print("   브라우저에서 직접 확인해주세요.")
             
             print(f"\n=== 세금계산서 자동 처리 시작 ===")
@@ -1847,7 +1846,7 @@ async def hometax_quick_login():
 def check_dependencies():
     """필수 패키지 확인 및 설치"""
     required_packages = ['openpyxl', 'psutil', 'xlwings', 'pywin32']
-    print("📦 의존성 패키지 확인 중...")
+    print("[INFO] 의존성 패키지 확인 중...")
     
     for package in required_packages:
         try:

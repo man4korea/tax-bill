@@ -23,7 +23,7 @@ async def process_transaction_details(page, processor, first_row_data, business_
         # 1. 동일 사업자번호 행들 가져오기
         work_rows = get_same_business_number_rows(processor, business_number)
         if not work_rows:
-            print("   ❌ 동일 사업자번호 데이터가 없습니다.")
+            print("   [ERROR] 동일 사업자번호 데이터가 없습니다.")
             return
             
         print(f"   📊 처리할 거래 건수: {len(work_rows)}건")
@@ -37,7 +37,7 @@ async def process_transaction_details(page, processor, first_row_data, business_
         elif len(work_rows) <= 16:
             await input_transaction_items_extended(page, work_rows)
         else:
-            print("   ⚠️ 16건 초과 - 분할 처리가 필요합니다.")
+            print("   [WARN] 16건 초과 - 분할 처리가 필요합니다.")
             # 16건씩 분할 처리 로직은 별도로 구현 필요
             work_rows = work_rows[:16]  # 임시로 16건만 처리
             await input_transaction_items_extended(page, work_rows)
@@ -55,10 +55,10 @@ async def process_transaction_details(page, processor, first_row_data, business_
         for row_data in work_rows:
             processor.write_completion_to_excel_q_column(row_data['excel_row'], "완료")
         
-        print("   ✅ 거래 내역 입력 프로세스 완료!")
+        print("   [OK] 거래 내역 입력 프로세스 완료!")
         
     except Exception as e:
-        print(f"   ❌ 거래 내역 입력 프로세스 오류: {e}")
+        print(f"   [ERROR] 거래 내역 입력 프로세스 오류: {e}")
         # 오류 발생 시 Q열에 오류 표시
         if 'work_rows' in locals():
             for row_data in work_rows:
@@ -72,7 +72,7 @@ def get_same_business_number_rows(processor, business_number):
         
         # selected_data에서 해당 사업자번호와 일치하는 모든 행 찾기
         if not hasattr(processor, 'selected_data') or not processor.selected_data:
-            print("   ❌ 처리할 데이터가 없습니다.")
+            print("   [ERROR] 처리할 데이터가 없습니다.")
             return []
         
         matching_rows = []
@@ -81,17 +81,17 @@ def get_same_business_number_rows(processor, business_number):
                 matching_rows.append(row_data)
         
         if not matching_rows:
-            print("   ❌ 일치하는 사업자번호 데이터가 없습니다.")
+            print("   [ERROR] 일치하는 사업자번호 데이터가 없습니다.")
             return []
         
         # 행 데이터를 리스트로 변환 (이미 dict 형태이므로 그대로 사용)
         work_rows = matching_rows
         
-        print(f"   ✅ {len(work_rows)}건의 거래 데이터 발견")
+        print(f"   [OK] {len(work_rows)}건의 거래 데이터 발견")
         return work_rows
         
     except Exception as e:
-        print(f"   ❌ 사업자번호 데이터 검색 오류: {e}")
+        print(f"   [ERROR] 사업자번호 데이터 검색 오류: {e}")
         return []
 
 
@@ -111,7 +111,7 @@ async def check_and_update_supply_date(page, first_row):
                 break
         
         if excel_date is None:
-            print("   ⚠️ Excel에서 날짜를 찾을 수 없어 현재 날짜를 사용합니다.")
+            print("   [WARN] Excel에서 날짜를 찾을 수 없어 현재 날짜를 사용합니다.")
             excel_date = datetime.now()
         
         # 날짜 형식 통일
@@ -156,12 +156,12 @@ async def check_and_update_supply_date(page, first_row):
             await hometax_date_input.fill(new_date_str)
             await page.wait_for_timeout(500)
             
-            print(f"   ✅ 공급일자 변경 완료: {new_date_str}")
+            print(f"   [OK] 공급일자 변경 완료: {new_date_str}")
         else:
-            print("   ✅ 공급일자 일치 - 변경 불필요")
+            print("   [OK] 공급일자 일치 - 변경 불필요")
             
     except Exception as e:
-        print(f"   ❌ 공급일자 확인 오류: {e}")
+        print(f"   [ERROR] 공급일자 확인 오류: {e}")
 
 
 async def input_transaction_items_basic(page, work_rows):
@@ -173,10 +173,10 @@ async def input_transaction_items_basic(page, work_rows):
             await input_single_transaction_item(page, i, row_data)
             await page.wait_for_timeout(300)
         
-        print("   ✅ 기본 거래 내역 입력 완료")
+        print("   [OK] 기본 거래 내역 입력 완료")
         
     except Exception as e:
-        print(f"   ❌ 기본 거래 내역 입력 오류: {e}")
+        print(f"   [ERROR] 기본 거래 내역 입력 오류: {e}")
 
 
 async def input_transaction_items_extended(page, work_rows):
@@ -199,7 +199,7 @@ async def input_transaction_items_extended(page, work_rows):
                     print(f"   ➕ 품목 추가 {add_count + 1}/{items_to_add}")
                     
                 except Exception as add_error:
-                    print(f"   ❌ 품목 추가 실패 {add_count + 1}: {add_error}")
+                    print(f"   [ERROR] 품목 추가 실패 {add_count + 1}: {add_error}")
                     break
         
         # 모든 거래 내역 입력
@@ -207,10 +207,10 @@ async def input_transaction_items_extended(page, work_rows):
             await input_single_transaction_item(page, i, row_data)
             await page.wait_for_timeout(300)
         
-        print("   ✅ 확장 거래 내역 입력 완료")
+        print("   [OK] 확장 거래 내역 입력 완료")
         
     except Exception as e:
-        print(f"   ❌ 확장 거래 내역 입력 오류: {e}")
+        print(f"   [ERROR] 확장 거래 내역 입력 오류: {e}")
 
 
 async def input_single_transaction_item(page, row_idx, row_data):
@@ -316,16 +316,16 @@ async def input_single_transaction_item(page, row_idx, row_data):
             await remark_input.clear()
             await remark_input.fill(remarks)
         
-        print(f"   ✅ {row_idx}번째 거래 내역 입력 완료")
+        print(f"   [OK] {row_idx}번째 거래 내역 입력 완료")
         
     except Exception as e:
-        print(f"   ❌ {row_idx}번째 거래 내역 입력 오류: {e}")
+        print(f"   [ERROR] {row_idx}번째 거래 내역 입력 오류: {e}")
 
 
 async def finalize_transaction_summary(page, work_rows, processor, business_number):
     """거래 합계 확정 및 결제방법 분류"""
     try:
-        print("   💰 거래 합계 확정 중...")
+        print("   [MONEY] 거래 합계 확정 중...")
         
         # Excel 데이터에서 결제 방법별 금액 계산 - 실제 컬럼명 사용
         cash_amount = 0
@@ -405,7 +405,7 @@ async def finalize_transaction_summary(page, work_rows, processor, business_numb
             await receipt_button.click()
             print("   📋 영수 버튼 클릭 완료")
         except Exception as e:
-            print(f"   ⚠️ 영수 버튼 클릭 실패: {e}")
+            print(f"   [WARN] 영수 버튼 클릭 실패: {e}")
         
         # 발급보류 버튼 클릭 (테스트용)
         try:
@@ -419,12 +419,12 @@ async def finalize_transaction_summary(page, work_rows, processor, business_numb
             await handle_issuance_alerts(page)
             
         except Exception as e:
-            print(f"   ❌ 발급보류 버튼 클릭 실패: {e}")
+            print(f"   [ERROR] 발급보류 버튼 클릭 실패: {e}")
         
-        print("   ✅ 거래 합계 확정 완료")
+        print("   [OK] 거래 합계 확정 완료")
         
     except Exception as e:
-        print(f"   ❌ 거래 합계 확정 오류: {e}")
+        print(f"   [ERROR] 거래 합계 확정 오류: {e}")
 
 
 async def verify_and_calculate_credit(page, work_rows, cash_amount, check_amount, note_amount):
@@ -456,7 +456,7 @@ async def verify_and_calculate_credit(page, work_rows, cash_amount, check_amount
         
         # HomeTax 값을 기준으로 사용 (불일치 검증 제거)
         total_amount = hometax_total
-        print(f"   ✅ 합계금액 확인: {total_amount:,.0f}원")
+        print(f"   [OK] 합계금액 확인: {total_amount:,.0f}원")
         
         # 현금+수표+어음이 모두 0인 경우 전체 금액을 외상미수금으로
         payment_total = cash_amount + check_amount + note_amount
@@ -470,13 +470,13 @@ async def verify_and_calculate_credit(page, work_rows, cash_amount, check_amount
             credit_amount = total_amount - payment_total
             
             if credit_amount < 0:
-                print("   ⚠️ 외상미수금이 음수입니다. 0으로 설정합니다.")
+                print("   [WARN] 외상미수금이 음수입니다. 0으로 설정합니다.")
                 credit_amount = 0
         
         return credit_amount
         
     except Exception as e:
-        print(f"   ❌ 합계금액 검증 오류: {e}")
+        print(f"   [ERROR] 합계금액 검증 오류: {e}")
         return 0
 
 
@@ -523,7 +523,7 @@ async def handle_issuance_alerts(page):
             
             # 두 번째 Alert 대기 (최대 3초)
             await asyncio.wait_for(dialog_event2.wait(), timeout=3.0)
-            print("   ✅ 두 번째 Alert 처리 완료")
+            print("   [OK] 두 번째 Alert 처리 완료")
             
         except asyncio.TimeoutError:
             print("   ℹ️ 두 번째 Alert 없음")
@@ -531,7 +531,7 @@ async def handle_issuance_alerts(page):
         await page.wait_for_timeout(1000)
         
     except Exception as e:
-        print(f"   ❌ Alert 처리 오류: {e}")
+        print(f"   [ERROR] Alert 처리 오류: {e}")
 
 
 async def clear_form_fields(page):
@@ -643,7 +643,7 @@ async def clear_form_fields(page):
         print(f"   🔄 폼 필드 초기화 완료: {cleared_count}개 필드 초기화됨")
         
     except Exception as e:
-        print(f"   ❌ 폼 필드 초기화 오류 (계속 진행): {e}")
+        print(f"   [ERROR] 폼 필드 초기화 오류 (계속 진행): {e}")
 
 
 async def write_to_tax_invoice_sheet(page, processor, work_rows, business_number):
@@ -702,4 +702,4 @@ async def write_to_tax_invoice_sheet(page, processor, work_rows, business_number
         print("   📄 세금계산서 시트 기록 및 필드 초기화 완료!")
         
     except Exception as e:
-        print(f"   ❌ 세금계산서 시트 기록 오류: {e}")
+        print(f"   [ERROR] 세금계산서 시트 기록 오류: {e}")
