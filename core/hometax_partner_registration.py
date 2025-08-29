@@ -6,9 +6,14 @@ HomeTax 거래처 등록 자동화 프로그램 (엑셀 통합 버전)
 3. HomeTax 자동 로그인 및 거래처 등록 화면 이동
 """
 
+# Windows 콘솔 유니코드 출력 설정
+import sys
+import io
+if sys.platform.startswith('win'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 import asyncio
 import os
-import sys
 import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -17,6 +22,10 @@ from playwright.async_api import async_playwright
 import pandas as pd
 from pathlib import Path
 import re
+
+# 보안 관리자 import
+sys.path.append(str(Path(__file__).parent.parent / "core"))
+from hometax_security_manager import HomeTaxSecurityManager
 
 def check_and_install_dependencies():
     """필수 의존성 패키지 확인 및 자동 설치"""
@@ -30,7 +39,7 @@ def check_and_install_dependencies():
     for package_name, package_spec in required_packages.items():
         try:
             __import__(package_name)
-            print(f"✅ {package_name} 설치됨")
+            print(f"[OK] {package_name} 설치됨")
         except ImportError:
             missing_packages.append(package_spec)
             print(f"❌ {package_name} 미설치")
@@ -212,8 +221,11 @@ class ExcelRowSelector:
     
     def load_field_mapping(self):
         """field_mapping.md 파일을 읽어서 매핑 정보 추출"""
-        mapping_file = "field_mapping.md"
-        if not os.path.exists(mapping_file):
+        # 절대 경로로 docs 폴더에서 파일 찾기
+        mapping_file = Path(__file__).parent / "field_mapping.md"
+        print(f"[DEBUG] 매핑 파일 경로: {mapping_file}")
+        print(f"[DEBUG] 파일 존재 여부: {mapping_file.exists()}")
+        if not mapping_file.exists():
             print(f"❌ {mapping_file} 파일을 찾을 수 없습니다.")
             return False
         
@@ -1192,18 +1204,7 @@ async def handle_business_number_validation(page, business_number, excel_selecto
 async def handle_other_special_fields(page, row_data, field_mapping):
     """기타 특별 처리가 필요한 필드들 처리 (사업자번호 제외)"""
     
-    # 1. 업태 조회 버튼 (필요시)
-    if '업태' in row_data and row_data['업태']:
-        try:
-            print("업태 조회 버튼 클릭 시도...")
-            business_type_btn = page.locator("#mf_txppWframe_btnBusinessType").first
-            await business_type_btn.click(timeout=1000)
-            await page.wait_for_timeout(500)
-            print("  ✅ 업태 조회 완료")
-        except Exception as e:
-            print(f"  ❌ 업태 조회 버튼 클릭 실패: {e}")
-    
-    # 2. 이메일 직접입력 버튼들
+    # 이메일 직접입력 버튼들
     email_fields = [
         ('주이메일앞', '주이메일뒤'),
         ('부이메일앞', '부이메일뒤')
@@ -1225,12 +1226,20 @@ async def handle_other_special_fields(page, row_data, field_mapping):
                 print(f"  ❌ {email_front.replace('앞', '')} 직접입력 버튼 클릭 실패: {e}")
 
 async def hometax_auto_login():
-    """HomeTax 자동 로그인 및 거래처 등록 화면 이동"""
+    """HomeTax 자동 로그인 및 거래처 등록 화면 이동 (암호화된 비밀번호 사용)"""
     load_dotenv()
-    cert_password = os.getenv("PW")
+    
+    # 보안 관리자를 통해 암호화된 비밀번호 로드
+    print("[SECURITY] 암호화된 비밀번호 로드 중...")
+    security_manager = HomeTaxSecurityManager()
+    cert_password = security_manager.load_password_from_env()
+    
     if not cert_password:
-        print("오류: .env 파일에 PW 변수가 설정되지 않았습니다.")
+        print("[ERROR] 암호화된 비밀번호가 설정되지 않았습니다.")
+        print("[HELP] hometax_cert_manager.py를 실행하여 비밀번호를 저장하세요.")
         return None, None
+    else:
+        print("[OK] 암호화된 비밀번호 로드 성공")
 
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(
@@ -1244,10 +1253,10 @@ async def hometax_auto_login():
     
     try:
         page = await browser.new_page()
-        page.set_default_timeout(1000)
+        page.set_default_timeout(30000)  # 30초로 증가
         
         print("홈택스 페이지 이동...")
-        await page.goto("https://hometax.go.kr/websquare/websquare.html?w2xPath=/ui/pp/index_pp.xml&menuCd=index3")
+        await page.goto("https://hometax.go.kr/websquare/websquare.html?w2xPath=/ui/pp/index_pp.xml&menuCd=index3", timeout=60000)  # 60초 타임아웃
         await page.wait_for_load_state('domcontentloaded')
         
         await page.wait_for_timeout(1500)
@@ -1632,6 +1641,7 @@ async def hometax_auto_login():
                         pass
                         
                 await browser.close()
+                await playwright.stop()
             except Exception as close_error:
                 print(f"브라우저 종료 중 오류: {close_error}")
         return None, None
@@ -1766,6 +1776,7 @@ async def main():
                         pass
                 
                 await browser.close()
+                await playwright.stop()
                 print("✅ 브라우저가 정상적으로 종료되었습니다.")
                 print("✅ 프로그램이 완료되었습니다.")
             except Exception as e:
@@ -1783,6 +1794,7 @@ async def main():
                         pass
                         
                 await browser.close()
+                await playwright.stop()
                 print("브라우저가 정상적으로 종료되었습니다.")
             except Exception as e:
                 print(f"브라우저 종료 중 오류: {e}")

@@ -9,10 +9,14 @@ from datetime import datetime
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
 from excel_data_manager import ExcelDataManager
+from hometax_security_manager import HomeTaxSecurityManager
 import pandas as pd
-import winsound  # Windows Beep 처리용
 
-# 거래 내역 입력 프로세스 모듈 import
+# 최적화된 모듈들 import
+from hometax_utils import (
+    play_beep, format_date, format_business_number, format_number,
+    FieldCollector, SelectorManager, MenuNavigator, DialogHandler
+)
 from hometax_transaction_processor import (
     process_transaction_details,
     get_same_business_number_rows,
@@ -27,18 +31,6 @@ from hometax_transaction_processor import (
     clear_form_fields
 )
 
-async def play_beep(count=1, frequency=800, duration=300):
-    """지정된 횟수만큼 Beep음을 재생합니다."""
-    try:
-        print(f"      [BEEP] 알림 {count}회...")
-        for i in range(count):
-            winsound.Beep(frequency, duration)
-            if i < count - 1:
-                await asyncio.sleep(0.2)
-        print("      [BEEP] 알림 완료")
-    except Exception as beep_error:
-        print(f"      Beep 처리 오류: {beep_error}")
-
 class TaxInvoiceExcelProcessor:
     def __init__(self):
         self.selected_rows = None
@@ -49,11 +41,11 @@ class TaxInvoiceExcelProcessor:
         # 엑셀 거래명세표 컬럼과 홈택스 필드 매칭 테이블
         self.field_mapping = {
             # 엑셀 컬럼 인덱스: (엑셀 컬럼명, 홈택스 필드 ID, 데이터 처리 함수)
-            0: ('작성일자', 'supply_date', self._format_date),
+            0: ('공급일자', 'supply_date', self._format_date),
             1: ('등록번호', 'business_number', self._format_business_number), 
             2: ('상호', 'company_name', str),
             3: ('품목코드', 'item_code', str),
-            4: ('품명', 'item_name', str),
+            4: ('품명명', 'item_name', str),
             5: ('규격', 'spec', str),
             6: ('수량', 'quantity', self._format_number),
             7: ('단가', 'unit_price', self._format_number),
@@ -91,31 +83,16 @@ class TaxInvoiceExcelProcessor:
         }
     
     def _format_date(self, value):
-        """날짜 형식 변환 (YYYY-MM-DD → YYYYMMDD)"""
-        if pd.isna(value) or not value:
-            return ""
-        date_str = str(value).replace('-', '').replace('/', '').replace('.', '')
-        return date_str[:8] if len(date_str) >= 8 else date_str
+        """날짜 형식 변환"""
+        return format_date(value)
     
     def _format_business_number(self, value):
-        """사업자번호 형식 변환 (하이픈 제거)"""
-        if pd.isna(value) or not value:
-            return ""
-        return str(value).replace('-', '').strip()
+        """사업자번호 형식 변환"""
+        return format_business_number(value)
     
     def _format_number(self, value):
         """숫자 형식 변환"""
-        if pd.isna(value) or not value:
-            return "0"
-        try:
-            if isinstance(value, str):
-                # 콤마 제거 후 숫자로 변환
-                clean_value = value.replace(',', '').strip()
-                return str(int(float(clean_value)))
-            else:
-                return str(int(float(value)))
-        except:
-            return "0"
+        return format_number(value) or "0"
     
     def write_error_to_excel(self, row_number, error_message="error"):
         """엑셀 파일의 지정된 행 발행일 열에 에러 메시지 작성"""
@@ -197,45 +174,83 @@ class TaxInvoiceExcelProcessor:
             
             print("   xlwings로 열린 Excel 파일에 직접 기록 시도...")
             
-            # 현재 열려있는 엑셀 앱에 연결
+            # 엑셀 앱 연결 (개선된 방법)
+            app = None
             try:
-                app = xw.apps.active
+                app = xw.apps.active if xw.apps else None
             except:
-                app = xw.App(visible=True, add_book=False)
-            
-            # 열린 워크북 찾기
-            workbook_name = self.excel_file_path.split("\\")[-1]  # 파일명만 추출
-            wb = None
-            
-            for book in app.books:
-                if book.name == workbook_name:
-                    wb = book
-                    break
-            
-            if wb:
-                # "거래명세표" 시트 선택
-                ws = None
-                for sheet in wb.sheets:
-                    if sheet.name == "거래명세표":
-                        ws = sheet
-                        break
+                pass
                 
-                if not ws:
-                    ws = wb.sheets[0]  # 첫 번째 시트 사용
-                
-                # Q열(17번째 열)에 완료 메시지 기록
+            if not app:
                 try:
-                    ws.range(f"Q{row_number}").value = completion_message
-                    print(f"   [OK] 행 {row_number} Q열에 '{completion_message}' 완료 기록 (xlwings)")
+                    app = xw.App(visible=True, add_book=False)
+                except:
+                    pass
+            
+            if app and hasattr(app, 'books'):
+                # 열린 워크북 찾기 (개선된 검색)
+                import os
+                workbook_name = os.path.basename(self.excel_file_path)
+                wb = None
+                
+                try:
+                    books_list = list(app.books)
+                    print(f"   [DEBUG] Q열 기록을 위해 열린 파일 검색 중... (총 {len(books_list)}개)")
                     
-                    # 저장
-                    wb.save()
-                    return True
-                    
-                except Exception as e:
-                    print(f"   [WARN] xlwings Q열 작성 실패: {e}")
+                    for book in books_list:
+                        try:
+                            book_name = book.name
+                            print(f"   [DEBUG] Q열 기록 - 파일 확인: '{book_name}' vs '{workbook_name}'")
+                            
+                            # 정확한 파일명 매칭
+                            if book_name == workbook_name:
+                                wb = book
+                                print(f"   [OK] Q열 기록용 파일 발견: '{book_name}'")
+                                break
+                            # 확장자 제거한 파일명 매칭
+                            elif book_name.replace('.xlsx', '') == workbook_name.replace('.xlsx', ''):
+                                wb = book
+                                print(f"   [OK] Q열 기록용 유사 파일명 발견: '{book_name}'")
+                                break
+                        except Exception as book_error:
+                            print(f"   [WARN] Q열 기록 - 파일 확인 오류: {book_error}")
+                            continue
+                            
+                except Exception as books_error:
+                    print(f"   [WARN] Q열 기록 - 워크북 목록 확인 실패: {books_error}")
+                
+                if wb:
+                    try:
+                        # "거래명세표" 시트 선택
+                        ws = None
+                        sheet_names = [sheet.name for sheet in wb.sheets]
+                        print(f"   [DEBUG] Q열 기록 - 사용 가능한 시트: {sheet_names}")
+                        
+                        for sheet in wb.sheets:
+                            if sheet.name == "거래명세표":
+                                ws = sheet
+                                print(f"   [OK] Q열 기록 - '거래명세표' 시트 발견")
+                                break
+                        
+                        if not ws:
+                            ws = wb.sheets[0]  # 첫 번째 시트 사용
+                            print(f"   [WARN] Q열 기록 - '거래명세표' 시트 없음, 기본 시트 사용: {ws.name}")
+                        
+                        # Q열(17번째 열)에 완료 메시지 기록
+                        print(f"   [INFO] Q열 기록 시도: 행 {row_number}, 메시지 '{completion_message}'")
+                        ws.range(f"Q{row_number}").value = completion_message
+                        print(f"   [OK] 행 {row_number} Q열에 '{completion_message}' 완료 기록 (xlwings)")
+                        
+                        # 저장
+                        wb.save()
+                        return True
+                        
+                    except Exception as write_error:
+                        print(f"   [WARN] xlwings Q열 작성 실패: {write_error}")
+                else:
+                    print(f"   [WARN] xlwings에서 '{workbook_name}' 파일을 찾을 수 없습니다.")
             else:
-                print(f"   [WARN] xlwings에서 '{workbook_name}' 파일을 찾을 수 없습니다.")
+                print(f"   [WARN] xlwings 앱에 연결할 수 없습니다.")
                 
         except ImportError:
             print("   xlwings가 설치되지 않았습니다. openpyxl 방법을 시도합니다...")
@@ -566,28 +581,60 @@ class TaxInvoiceExcelProcessor:
             if excel_processes:
                 print("   Excel 프로세스 실행 중")
                 
-                # xlwings로 정확한 파일 확인
+                # xlwings로 정확한 파일 확인 (여러 방법 시도)
                 try:
                     import xlwings as xw
-                    app = xw.App(visible=True, add_book=False)
                     
-                    if app.books:
-                        print(f"   열린 Excel 파일들을 확인합니다...")
-                        for book in app.books:
-                            print(f"   - 확인 중: '{book.name}'")
-                            if book.name.lower() == target_filename.lower():
-                                print(f"   [OK] '{book.name}' 파일이 이미 열려있습니다! 중복 열기 방지")
-                                self.excel_file_path = book.fullname
-                                return True
-                            elif target_filename.lower().replace('.xlsx', '') in book.name.lower():
-                                print(f"   유사한 파일명 발견: '{book.name}' (읽기 전용일 수 있음)")
-                                # 유사한 파일명도 이미 열려있는 것으로 처리
-                                self.excel_file_path = book.fullname
-                                print(f"   [OK] 유사 파일 사용: '{book.name}' - 중복 열기 방지")
-                                return True
-                        print(f"   Excel은 실행 중이지만 '{target_filename}' 파일이 열려있지 않습니다.")
+                    # 방법 1: 기존 앱에 연결 시도
+                    try:
+                        app = xw.apps.active if xw.apps else None
+                    except:
+                        app = None
+                    
+                    # 방법 2: 새로운 앱 인스턴스로 연결 시도
+                    if not app:
+                        try:
+                            app = xw.App(visible=True, add_book=False)
+                        except:
+                            app = None
+                    
+                    if app and hasattr(app, 'books'):
+                        try:
+                            books_list = list(app.books)  # books 리스트 안전하게 변환
+                            if books_list:
+                                print(f"   열린 Excel 파일들을 확인합니다... (총 {len(books_list)}개)")
+                                for book in books_list:
+                                    try:
+                                        book_name = book.name
+                                        book_fullname = book.fullname
+                                        print(f"   - 확인 중: '{book_name}' (전체경로: {book_fullname})")
+                                        
+                                        # 파일명 비교 (확장자 포함)
+                                        if book_name.lower() == target_filename.lower():
+                                            print(f"   [OK] '{book_name}' 파일이 이미 열려있습니다! 중복 열기 방지")
+                                            self.excel_file_path = book_fullname
+                                            return True
+                                        # 확장자 없는 파일명 비교
+                                        elif target_filename.lower().replace('.xlsx', '') == book_name.lower().replace('.xlsx', ''):
+                                            print(f"   [OK] 유사 파일명 발견: '{book_name}' - 중복 열기 방지")
+                                            self.excel_file_path = book_fullname
+                                            return True
+                                        # 부분 일치 검사 (더 엄격하게)
+                                        elif target_filename.lower().replace('.xlsx', '') in book_name.lower() and len(book_name) < len(target_filename) + 10:
+                                            print(f"   [OK] 부분일치 파일 발견: '{book_name}' - 중복 열기 방지")
+                                            self.excel_file_path = book_fullname
+                                            return True
+                                    except Exception as book_error:
+                                        print(f"   [WARN] 파일 정보 읽기 실패: {book_error}")
+                                        continue
+                                print(f"   Excel은 실행 중이지만 '{target_filename}' 파일이 열려있지 않습니다.")
+                            else:
+                                print("   Excel은 실행 중이지만 열린 파일이 없습니다.")
+                        except Exception as books_error:
+                            print(f"   [WARN] Excel 파일 목록 확인 실패: {books_error}")
+                            print("   Excel은 실행 중이지만 파일 목록을 확인할 수 없습니다.")
                     else:
-                        print("   Excel은 실행 중이지만 열린 파일이 없습니다.")
+                        print("   Excel 앱에 연결할 수 없습니다.")
                         
                 except ImportError:
                     print("   xlwings가 설치되지 않았습니다.")
@@ -875,11 +922,34 @@ class TaxInvoiceExcelProcessor:
             except:
                 df = pd.read_excel(self.excel_file_path)  # 기본 시트 사용
             
+            # Excel 컬럼 정보 디버깅
+            print(f"[DEBUG] Excel 컬럼 정보:")
+            print(f"   컬럼 개수: {len(df.columns)}")
+            for i, col in enumerate(df.columns):
+                print(f"   {i}: '{col}' (타입: {type(col)})")
+            
             self.selected_data = []
             for row_num in self.selected_rows:
                 try:
                     row_data = df.iloc[row_num-2].to_dict()  # -2는 엑셀 행 번호를 pandas 인덱스로 변환
                     row_data['excel_row'] = row_num
+                    
+                    # 디버깅: 읽은 데이터의 키들 출력
+                    print(f"[DEBUG] 행 {row_num} 데이터 키들: {list(row_data.keys())}")
+                    
+                    # 비고 데이터 특별히 확인
+                    if '비고' in row_data:
+                        print(f"   '비고' 컬럼 값: '{row_data['비고']}'")
+                    else:
+                        # 비슷한 이름의 컬럼 찾기
+                        possible_remark_cols = [key for key in row_data.keys() if '비고' in str(key) or 'remark' in str(key).lower() or '메모' in str(key)]
+                        if possible_remark_cols:
+                            print(f"   '비고'와 유사한 컬럼들: {possible_remark_cols}")
+                            for col in possible_remark_cols:
+                                print(f"   '{col}' 값: '{row_data[col]}'")
+                        else:
+                            print(f"   '비고' 컬럼을 찾을 수 없습니다.")
+                    
                     self.selected_data.append(row_data)
                 except IndexError:
                     print(f"경고: 행 {row_num}은 데이터 범위를 벗어났습니다.")
@@ -1035,6 +1105,24 @@ async def process_selected_rows_sequentially(page, processor):
     
     print(f"\n거래처별 순차 처리 완료!")
     print(f"   처리된 그룹 수: {processed_count} / {len(groups)}")
+    
+    # 모든 거래처 처리 완료 후 로그아웃
+    try:
+        print("\n[LOGOUT] 모든 작업 완료 - 로그아웃 처리 중...")
+        await page.wait_for_timeout(2000)  # 안정화 대기
+        
+        # 로그아웃 버튼 클릭
+        logout_btn = page.locator("#mf_wfHeader_group1503")
+        await logout_btn.wait_for(state="visible", timeout=5000)
+        await logout_btn.click()
+        print("[OK] 로그아웃 버튼 클릭 완료")
+        
+        # 로그아웃 확인 대기
+        await page.wait_for_timeout(3000)
+        print("[OK] 로그아웃 처리 완료")
+        
+    except Exception as logout_error:
+        print(f"[WARN] 로그아웃 처리 실패 (무시하고 계속): {logout_error}")
 
 async def process_single_tax_invoice(page, group_data, processor):
     """월 합계 세금계산서 처리 (16건까지의 거래명세표)"""
@@ -1050,7 +1138,24 @@ async def process_single_tax_invoice(page, group_data, processor):
                 processor.write_error_to_excel_q_column(row['excel_row'], "번호없음")
             return
 
+        # 사업자번호 검증
         await input_business_number_and_verify(page, business_number, processor, first_row)
+        
+        # 거래명세표 입력
+        await input_transaction_details(page, group_data, processor)
+        
+        # 발급보류 처리
+        from hometax_transaction_processor import finalize_transaction_summary, write_to_tax_invoice_sheet
+        
+        issuance_success = await finalize_transaction_summary(page, group_data, processor, business_number)
+        
+        # 세금계산서 시트에 기록
+        if issuance_success:
+            await write_to_tax_invoice_sheet(page, processor, group_data, business_number)
+            print(f"      [OK] 세금계산서 처리 완료: {business_number}")
+        else:
+            print(f"      [ERROR] 발급보류 실패: {business_number}")
+            processor.write_error_to_all_matching_business_numbers(business_number, "발급실패")
         
     except Exception as e:
         print(f"      사업자번호 검증 처리 실패: {e}")
@@ -1105,6 +1210,7 @@ async def input_transaction_details(page, group_data, processor):
 async def input_transaction_item(page, row_idx, row_data, processor):
     """개별 거래명세표 행 입력"""
     try:
+        print(f"            엑셀 데이터 키들: {list(row_data.keys())}")  # 디버깅용
         # 입력 필드 매핑
         field_mapping = {
             'supply_date': f"#mf_txppWframe_genEtxivLsatTop_{row_idx}_edtLsatSplDdTop",    # 일
@@ -1116,15 +1222,40 @@ async def input_transaction_item(page, row_idx, row_data, processor):
             'tax_amount': f"#mf_txppWframe_genEtxivLsatTop_{row_idx}_edtLsatTxamtTop"    # 세액
         }
         
-        # 데이터 매핑 (엑셀 컬럼 → HomeTax 필드)
+        # 유연한 컬럼명 매핑을 위한 헬퍼 함수
+        def get_field_value(row_data, field_names, is_date=False, field_type=""):
+            """여러 가능한 컬럼명에서 값을 찾아 반환"""
+            for field_name in field_names:
+                if field_name in row_data and row_data[field_name]:
+                    value = str(row_data[field_name]).strip()
+                    if is_date and value:
+                        # 날짜 형식 정리 (YYYY-MM-DD, YYYY/MM/DD 등을 YYYYMMDD로 변환)
+                        value = value.replace('-', '').replace('/', '').replace('.', '')
+                        # 날짜에서 일자만 추출 (마지막 2자리)
+                        if len(value) >= 2:
+                            try:
+                                import pandas as pd
+                                date_obj = pd.to_datetime(row_data[field_name])
+                                value = str(date_obj.day)  # 일자만 추출
+                                print(f"            {field_type} 매핑: '{field_name}' = {row_data[field_name]} → 일자 {value}")
+                            except:
+                                value = value[-2:]  # 마지막 2자리만
+                                print(f"            {field_type} 매핑: '{field_name}' = {row_data[field_name]} → 일자 {value} (fallback)")
+                    else:
+                        print(f"            {field_type} 매핑: '{field_name}' = {value}")
+                    return value
+            print(f"            {field_type} 매핑: 해당 컬럼 없음 (시도한 컬럼들: {field_names})")
+            return ''
+        
+        # 데이터 매핑 (엑셀 컬럼 → HomeTax 필드) - 사용자 엑셀 컬럼명에 맞게 우선순위 조정
         input_data = {
-            'supply_date': str(row_data.get('작성일자', '')).replace('-', '').replace('/', '').replace('.', ''),  # 엑셀 "작성일자" → HomeTax "공급일자"
-            'item_name': str(row_data.get('품명', '')).strip(),        # 엑셀 "품명" → HomeTax "품목"
-            'spec': str(row_data.get('규격', '')).strip(),             # 엑셀 "규격" → HomeTax "규격"
-            'quantity': str(row_data.get('수량', '')).strip(),         # 엑셀 "수량" → HomeTax "수량"  
-            'unit_price': str(row_data.get('단가', '')).strip(),       # 엑셀 "단가" → HomeTax "단가"
-            'supply_amount': str(row_data.get('공급가액', '')).strip(), # 엑셀 "공급가액" → HomeTax "공급가액"
-            'tax_amount': str(row_data.get('세액', '')).strip()        # 엑셀 "세액" → HomeTax "세액"
+            'supply_date': get_field_value(row_data, ['공급일자', '작성일자', '일자', '날짜', 'supply_date', 'date', 'supply_dt'], is_date=True, field_type="일자"),
+            'item_name': get_field_value(row_data, ['품목명', '품명', '품목', 'item_name', 'item', 'product', 'product_name', '상품명', 'name'], field_type="품목"),
+            'spec': get_field_value(row_data, ['규격', 'spec', 'specification', 'size'], field_type="규격"),
+            'quantity': get_field_value(row_data, ['수량', 'quantity', 'qty', 'amount'], field_type="수량"),
+            'unit_price': get_field_value(row_data, ['단가', 'unit_price', 'price', 'unitprice'], field_type="단가"),
+            'supply_amount': get_field_value(row_data, ['공급가액', 'supply_amount', 'amount', 'total'], field_type="공급가액"),
+            'tax_amount': get_field_value(row_data, ['세액', 'tax_amount', 'tax', 'vat'], field_type="세액")
         }
         
         # 각 필드에 데이터 입력
@@ -1138,8 +1269,10 @@ async def input_transaction_item(page, row_idx, row_data, processor):
                     await input_field.fill(value)
                     await page.wait_for_timeout(200)
                     print(f"            {field_key}: {value}")
+                else:
+                    print(f"            {field_key}: (빈 값 - 건너뜀)")
             except Exception as e:
-                print(f"            {field_key} 입력 실패: {e}")
+                print(f"            {field_key} 입력 실패: {e} (선택자: {selector})")
                 continue
         
     except Exception as e:
@@ -1166,22 +1299,56 @@ async def input_business_number_and_verify(page, business_number, processor, row
 
         page.once("dialog", handle_dialog)
 
-        # 2. 확인 버튼 클릭
-        await page.locator("#mf_txppWframe_btnDmnrBsnoCnfrTop").click()
+        # 2. 확인 버튼 클릭 (타임아웃 방지를 위한 다단계 대기)
+        confirm_btn = page.locator("#mf_txppWframe_btnDmnrBsnoCnfrTop")
+        try:
+            # 버튼이 존재하고 클릭 가능할 때까지 대기 (더 긴 타임아웃)
+            await confirm_btn.wait_for(state="attached", timeout=15000)
+            await confirm_btn.wait_for(state="visible", timeout=5000)
+            await page.wait_for_timeout(1000)  # 추가 안정화 대기
+            await confirm_btn.click(timeout=10000)
+            print(f"      [OK] 사업자번호 확인 버튼 클릭 완료")
+        except Exception as click_error:
+            print(f"      [ERROR] 확인 버튼 클릭 실패 - 재시도: {click_error}")
+            # 재시도 로직 - 페이지 새로고침 후 다시 시도
+            await page.reload()
+            await page.wait_for_timeout(3000)
+            await page.locator("#mf_txppWframe_edtDmnrBsnoTop").fill(business_number)
+            await page.wait_for_timeout(1000)
+            await confirm_btn.click()
 
         # 잠시 대기하여 반응 확인
         await page.wait_for_timeout(500)
 
-        # 3. 뜨는 화면이 종사업장 메시지 박스인가?
+        # 3. Alert가 이미 감지되었는지 확인
+        if dialog_detected:
+            print("      Alert 이미 처리됨 - 종사업장 체크 건너뜀")
+            await page.wait_for_timeout(1000)
+            
+            # Alert 메시지에 따른 처리 분기
+            if dialog_message and "사업자등록번호를 입력하세요" in dialog_message:
+                print(f"      [ERROR] 사업자번호 입력 오류: {dialog_message}")
+                processor.write_error_to_all_matching_business_numbers(business_number, "번호오류")
+                raise Exception(f"사업자번호 입력 오류: {dialog_message}")
+            elif dialog_message and "정상적인 사업자번호" in dialog_message:
+                # 사업자번호 검증 완료 후 거래처 정보 수집
+                await collect_partner_info_after_verification(page, business_number, processor)
+                print("      사업자번호 검증 완료")
+                return
+            else:
+                print(f"      [WARN] 알 수 없는 Alert: {dialog_message}")
+                return
+        
+        # 4. Alert가 없으면 종사업장 메시지 박스 확인
         try:
             branch_popup_close_button = page.locator("#mf_txppWframe_ABTIBsnoUnitPopup2_wframe_btnClose0")
             await branch_popup_close_button.wait_for(state="visible", timeout=1000)
             
-            # 4. Yes이면 종사업장 메시지 박스의 닫기
+            # 5. Yes이면 종사업장 메시지 박스의 닫기
             print("      종사업장 메시지 박스 발견. 닫기 버튼 클릭.")
             await branch_popup_close_button.click()
             
-            # 5. 열려있는 세금계산서.xlsx 거래처 시트 q열의 해당거래처의 cell들에 "미등록(주)"라고 기록하고 beep 1회 울림
+            # 6. 열려있는 세금계산서.xlsx 거래처 시트 q열의 해당거래처의 cell들에 "미등록(주)"라고 기록하고 beep 1회 울림
             print("      엑셀에 '미등록(주)' 기록")
             processor.write_error_to_all_matching_business_numbers(business_number, "미등록(주)")
             await play_beep(1)
@@ -1196,7 +1363,18 @@ async def input_business_number_and_verify(page, business_number, processor, row
                 await asyncio.wait_for(dialog_event.wait(), timeout=3.0)
                 # 7. alert이 닫힌 후 1초 대기
                 await page.wait_for_timeout(1000)
-                print("      Alert 처리 완료")
+                
+                # Alert 메시지에 따른 처리 분기
+                if dialog_message and "사업자등록번호를 입력하세요" in dialog_message:
+                    print(f"      [ERROR] 사업자번호 입력 오류: {dialog_message}")
+                    processor.write_error_to_all_matching_business_numbers(business_number, "번호오류")
+                    raise Exception(f"사업자번호 입력 오류: {dialog_message}")
+                elif dialog_message and "정상적인 사업자번호" in dialog_message:
+                    # Alert 처리 완료 후 거래처 정보 수집
+                    await collect_partner_info_after_verification(page, business_number, processor)
+                    print("      Alert 처리 완료")
+                else:
+                    print(f"      [WARN] 알 수 없는 Alert: {dialog_message}")
             except asyncio.TimeoutError:
                 print("      Alert가 감지되지 않았습니다.")
                 # 리스너 제거
@@ -1373,13 +1551,33 @@ async def fill_tax_invoice_form(page, transaction):
 
 async def hometax_quick_login():
     """
-    빠른 홈택스 로그인 자동화 (대기시간 최소화) + 엑셀 데이터 연동
+    빠른 홈택스 로그인 자동화 (자동/수동 로그인 모드 지원) + 엑셀 데이터 연동
     """
     load_dotenv()
-    cert_password = os.getenv("PW")
-    if not cert_password:
-        print("오류: .env 파일에 PW 변수가 설정되지 않았습니다.")
-        return
+    
+    # 로그인 모드 확인 (환경변수로 설정됨)
+    login_mode = os.getenv("HOMETAX_LOGIN_MODE", "auto")
+    print(f"로그인 모드: {login_mode}")
+    
+    cert_password = None
+    if login_mode == "auto":
+        # 보안 관리자를 통해 암호화된 비밀번호 로드
+        print("[SECURITY] 보안 관리자로부터 암호화된 비밀번호 로드 중...")
+        security_manager = HomeTaxSecurityManager()
+        cert_password = security_manager.load_password_from_env()
+            
+        if not cert_password:
+            print("[ERROR] 오류: 자동로그인 모드이지만 암호화된 비밀번호가 설정되지 않았습니다.")
+            print("[HELP] 해결 방법:")
+            print("   1. 공인인증서 비밀번호 관리 프로그램을 실행하세요")
+            print("   2. 또는 다음 명령을 실행하세요:")
+            print("      python core/hometax_cert_manager.py")
+            print("   3. 자동로그인을 선택하고 비밀번호를 저장하세요")
+            return
+        else:
+            print("[OK] 암호화된 비밀번호 로드 성공")
+    else:
+        print("수동로그인 모드: 인증서 선택 후 비밀번호를 직접 입력하세요.")
     
     # 먼저 엑셀 파일 선택 및 행 선택 GUI 실행
     print("=== 엑셀 파일 선택 및 거래명세표 행 선택 ===")
@@ -1491,19 +1689,35 @@ async def hometax_quick_login():
             
             # iframe 존재 여부와 내용 로딩을 분리하여 처리
             iframe_exists = False
-            try:
-                # 먼저 iframe이 존재하는지 확인
-                await page.wait_for_selector("#dscert", timeout=5000)
-                iframe_exists = True
-                print("   [OK] #dscert iframe 발견")
-            except:
-                print("   [ERROR] #dscert iframe 없음")
+            iframe_selector = None
+            
+            # 가능한 iframe 선택자들을 순서대로 시도
+            iframe_selectors_to_try = [
+                "#dscert",
+                "iframe[id*='cert']",
+                "iframe[name*='cert']",
+                "iframe[src*='cert']"
+            ]
+            
+            for selector in iframe_selectors_to_try:
+                try:
+                    await page.wait_for_selector(selector, timeout=5000)
+                    iframe_exists = True
+                    iframe_selector = selector
+                    print(f"   [OK] iframe 발견: {selector}")
+                    break
+                except:
+                    print(f"   [ERROR] iframe 없음: {selector}")
+                    continue
+            
+            if not iframe_exists:
+                print("   [ERROR] 모든 iframe 선택자 실패")
             
             if iframe_exists:
                 # iframe이 존재하면 내용 로딩을 여러 방법으로 시도
                 for i in range(10):
                     try:
-                        dscert_iframe = page.frame_locator("#dscert")
+                        dscert_iframe = page.frame_locator(iframe_selector)
                         
                         # 방법 1: body 대기
                         try:
@@ -1568,12 +1782,40 @@ async def hometax_quick_login():
                     print("인증서 선택 실패 - 수동으로 선택하세요")
                     await page.wait_for_timeout(5000)  # 수동 선택 대기
             
-            # 비밀번호 빠른 입력
-            print("비밀번호 입력...")
-            password_input = dscert_iframe.locator("#input_cert_pw").first
-            await password_input.wait_for(state="visible", timeout=3000)
-            await password_input.fill(cert_password)
-            print("비밀번호 입력 완료")
+            # 비밀번호 입력 (모드에 따라 분기)
+            if login_mode == "auto":
+                print("비밀번호 자동 입력...")
+                password_input = dscert_iframe.locator("#input_cert_pw").first
+                await password_input.wait_for(state="visible", timeout=3000)
+                await password_input.fill(cert_password)
+                print("비밀번호 자동 입력 완료")
+            else:
+                print("수동 입력 모드: 비밀번호를 직접 입력하세요")
+                print("비밀번호 입력 필드: #input_cert_pw")
+                
+                # 비밀번호 입력 필드가 나타날 때까지 대기
+                password_input = dscert_iframe.locator("#input_cert_pw").first
+                await password_input.wait_for(state="visible", timeout=10000)
+                
+                print("여기서 수동입력 대기")
+                print("비밀번호를 입력하면 #input_cert_pw 셀렉션에 입력된 값을 이용하여 다음 자동화 프로세스 진행")
+                
+                # 사용자가 비밀번호를 입력할 때까지 대기 (최대 60초)
+                for i in range(60):
+                    try:
+                        password_value = await password_input.input_value()
+                        if password_value and len(password_value.strip()) > 0:
+                            print(f"비밀번호 입력 감지됨 (길이: {len(password_value)})")
+                            break
+                    except:
+                        pass
+                    await asyncio.sleep(1)
+                    if i % 10 == 0 and i > 0:
+                        print(f"비밀번호 입력 대기 중... ({60-i}초 남음)")
+                else:
+                    print("비밀번호 입력 시간 초과 - 수동으로 확인 버튼을 클릭하세요")
+                    
+                print("수동 비밀번호 입력 완료 감지")
             
             # 확인 버튼 빠른 클릭
             print("확인 버튼 클릭...")
@@ -1914,6 +2156,71 @@ def check_dependencies():
             except subprocess.CalledProcessError as e:
                 print(f"[ERROR] {package} 설치 실패: {e}")
                 print(f"수동 설치 필요: pip install {package}")
+
+async def collect_partner_info_after_verification(page, business_number, processor):
+    """사업자번호 검증 완료 후 거래처 정보 수집 및 저장"""
+    try:
+        print("      [COLLECT] 거래처 정보 수집 중...")
+        await page.wait_for_timeout(1000)  # 정보 로딩 대기
+        
+        # 거래처 정보 수집
+        partner_info = {}
+        
+        # 1. 상호명 수집
+        try:
+            company_name = await page.locator("#mf_txppWframe_edtDmnrTnmNmTop").input_value()
+            partner_info['company_name'] = company_name.strip() if company_name else ""
+            print(f"         상호: {partner_info['company_name']}")
+        except Exception as e:
+            print(f"         상호 수집 실패: {e}")
+            partner_info['company_name'] = ""
+        
+        # 2. 대표자명 수집
+        try:
+            representative_name = await page.locator("#mf_txppWframe_edtDmnrRprsFnmTop").input_value()
+            partner_info['representative_name'] = representative_name.strip() if representative_name else ""
+            print(f"         대표자: {partner_info['representative_name']}")
+        except Exception as e:
+            print(f"         대표자명 수집 실패: {e}")
+            partner_info['representative_name'] = ""
+        
+        # 3. 이메일 앞자리 수집
+        try:
+            email_front = await page.locator("#mf_txppWframe_edtDmnrMchrgEmlIdTop").input_value()
+            partner_info['email_front'] = email_front.strip() if email_front else ""
+            print(f"         이메일 앞자리: {partner_info['email_front']}")
+        except Exception as e:
+            print(f"         이메일 앞자리 수집 실패: {e}")
+            partner_info['email_front'] = ""
+        
+        # 4. 이메일 뒷자리 수집
+        try:
+            email_back = await page.locator("#mf_txppWframe_edtDmnrMchrgEmlDmanTop").input_value()
+            partner_info['email_back'] = email_back.strip() if email_back else ""
+            print(f"         이메일 뒷자리: {partner_info['email_back']}")
+        except Exception as e:
+            print(f"         이메일 뒷자리 수집 실패: {e}")
+            partner_info['email_back'] = ""
+        
+        # 5. 전체 이메일 조합
+        if partner_info['email_front'] and partner_info['email_back']:
+            partner_info['full_email'] = f"{partner_info['email_front']}@{partner_info['email_back']}"
+        else:
+            partner_info['full_email'] = ""
+        
+        # 6. 사업자번호 포함
+        partner_info['business_number'] = business_number
+        
+        # 7. processor에 거래처 정보 저장 (세금계산서 시트 기록용)
+        if hasattr(processor, 'partner_info_cache'):
+            processor.partner_info_cache[business_number] = partner_info
+        else:
+            processor.partner_info_cache = {business_number: partner_info}
+        
+        print(f"         [OK] 거래처 정보 수집 완료: {partner_info['company_name']}")
+        
+    except Exception as e:
+        print(f"      [ERROR] 거래처 정보 수집 실패: {e}")
 
 if __name__ == "__main__":
     print("홈택스 세금계산서 자동화 프로그램")

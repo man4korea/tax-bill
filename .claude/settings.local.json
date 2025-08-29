@@ -16,7 +16,11 @@
       "Read(C:\\Users\\man4k/**)",
       "Bash(git add:*)",
       "Bash(git push:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(pip install:*)",
+      "mcp__ide__executeCode",
+      "mcp__ide__getDiagnostics",
+      "Bash(where python)"
     ],
     "deny": [],
     "ask": []

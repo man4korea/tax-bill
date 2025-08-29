@@ -203,13 +203,13 @@ class HomeTaxMainSystem:
     
     def run_auto_issue(self):
         """전자세금계산서 자동발행 실행"""
-        program_path = r"C:\APP\tax-bill\hometax_quick.py"
-        self.run_program(program_path, "전자세금계산서 자동발행")
+        program_path = Path(__file__).parent / "tax-invoice" / "hometax_tax_invoice.py"
+        self.run_program(str(program_path), "전자세금계산서 자동발행")
     
     def run_partner_management(self):
         """거래처 등록관리 실행"""
-        program_path = r"C:\APP\tax-bill\hometax_excel_integration.py"
-        self.run_program(program_path, "거래처 등록관리")
+        program_path = Path(__file__).parent / "hometax_partner_registration.py"
+        self.run_program(str(program_path), "거래처 등록관리")
     
     def run_transaction_inquiry(self):
         """거래명세서 조회 실행 (미구현)"""
@@ -228,12 +228,32 @@ class HomeTaxMainSystem:
         self.update_status("세금계산서 조회 - 개발 예정", '#FFC107')
     
     def run_cert_management(self):
-        """공인인증서 비밀번호 관리 실행 (미구현)"""
-        messagebox.showinfo(
-            "기능 안내",
-            "공인인증서 비밀번호 관리 기능은 개발 예정입니다.\n현재는 .env 파일을 통해 관리됩니다."
-        )
-        self.update_status("인증서 관리 - 개발 예정", '#FFC107')
+        """공인인증서 비밀번호 관리 실행"""
+        self.update_status("인증서 관리 실행 중...", '#007BFF')
+        
+        try:
+            # 공인인증서 관리 모듈 import 및 실행
+            from hometax_cert_manager import HomeTaxCertManager
+            
+            # 새로운 인증서 관리 창 열기
+            cert_manager = HomeTaxCertManager(parent=self.root)
+            self.update_status("인증서 관리 창이 열렸습니다", '#28A745')
+            
+        except ImportError as e:
+            print(f"모듈 import 오류: {e}")
+            messagebox.showerror(
+                "오류",
+                f"공인인증서 관리 모듈을 불러올 수 없습니다.\n필요한 패키지를 설치하세요: pip install cryptography"
+            )
+            self.update_status("인증서 관리 - 모듈 오류", '#DC3545')
+            
+        except Exception as e:
+            print(f"인증서 관리 실행 오류: {e}")
+            messagebox.showerror(
+                "오류", 
+                f"공인인증서 관리 실행 중 오류가 발생했습니다.\n{str(e)}"
+            )
+            self.update_status("인증서 관리 - 오류", '#DC3545')
     
     def run(self):
         """프로그램 실행"""

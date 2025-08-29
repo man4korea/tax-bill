@@ -27,10 +27,13 @@ Korean HomeTax Tax Invoice Automation System - Claude Code AI 개발 가이드
 
 ```
 C:\APP\tax-bill\
-├── 📂 core/                    # 핵심 시스템 모듈
+├── 📂 core/                    # 핵심 시스템 모듈 (최적화 완료)
 │   ├── hometax_main.py         # 메인 UI 애플리케이션
-│   ├── hometax_quick.py        # 세금계산서 자동화 엔진
-│   ├── hometax_transaction_processor.py  # 거래내역 처리 모듈 
+│   ├── hometax_quick.py        # 세금계산서 자동화 엔진 (2,214줄 → 유틸리티 연동)
+│   ├── hometax_transaction_processor.py  # 거래내역 처리 모듈 (1,346줄 → 함수 분리)
+│   ├── hometax_utils.py        # 공통 유틸리티 모듈 (242줄 신규)
+│   ├── hometax_security_manager.py # 보안 관리 모듈
+│   ├── hometax_cert_manager.py # 인증서 관리 모듈
 │   ├── excel_data_manager.py   # 엑셀 데이터 관리자
 │   └── excel_reader.py         # 엑셀 파일 리더
 │
@@ -74,6 +77,7 @@ C:\APP\tax-bill\
 └── CLAUDE.md                 # 본 파일 - AI 개발 가이드
 ```
 
+## 세금계산서 루틴은 "C:\APP\tax-bill\docs\세금계산서 루틴.md" 참고
 ---
 
 ## 🚀 실행 방법
@@ -144,13 +148,27 @@ echo PW=your_certificate_password > .env
 
 ## 🏗️ 시스템 아키텍처
 
-### 핵심 모듈 관계도
+### 최적화된 핵심 모듈 관계도 (code-simplifier 에이전트 적용)
 ```
 [hometax_main.py] - 메인 UI 애플리케이션
          │
-         └─► [hometax_quick.py] - 세금계산서 자동화 엔진
+         └─► [hometax_quick.py] - 세금계산서 자동화 엔진 (최적화)
                       │
-                      ├─► [hometax_transaction_processor.py] - 거래내역 처리
+                      ├─► [hometax_utils.py] - 공통 유틸리티 (신규)
+                      │    ├── FieldCollector (홈택스 필드 수집)
+                      │    ├── SelectorManager (셀렉터 관리)
+                      │    ├── MenuNavigator (메뉴 네비게이션)
+                      │    ├── DialogHandler (팝업 처리)
+                      │    └── format functions (데이터 형식 변환)
+                      │
+                      ├─► [hometax_transaction_processor.py] - 거래내역 처리 (함수 분리)
+                      │    ├── process_transaction_details() (메인 프로세스)
+                      │    ├── check_and_update_supply_date() (3개 헬퍼로 분리)
+                      │    ├── input_single_transaction_item() (4개 함수로 분할)
+                      │    └── finalize_transaction_summary() (3개 함수로 분할)
+                      │
+                      ├─► [hometax_security_manager.py] - 보안 관리
+                      ├─► [hometax_cert_manager.py] - 인증서 관리
                       └─► [excel_data_manager.py] - 엑셀 데이터 관리
                                │
                                └─► [excel_reader.py] - 엑셀 파일 읽기
@@ -180,10 +198,13 @@ echo PW=your_certificate_password > .env
   - 합계 검증 및 외상미수금 자동 계산
   - 금액 불일치 시 연속 beep 알림 및 사용자 수정 대기
 
-#### 🔧 Phase 2: 시스템 최적화
-- ✅ **토큰 효율성 개선** - 파일 분할 모듈화
-  - `hometax_transaction_processor.py` 분리 (12개 함수)
-  - 메인 파일 크기 대폭 감소 (2344줄 → 최적화)
+#### 🔧 Phase 2: 시스템 최적화 (code-simplifier 에이전트 완료)
+- ✅ **코드 모듈화 및 간소화** - code-simplifier 에이전트 활용
+  - `hometax_utils.py` 신규 생성 (242줄) - 공통 기능 분리
+  - `hometax_transaction_processor.py` 함수 분리 (1,346줄 최적화)
+  - `hometax_quick.py` 유틸리티 연동 (2,214줄 구조 개선)
+- ✅ **중복 코드 제거** - 토큰 효율성 대폭 향상
+- ✅ **클래스 기반 구조** - FieldCollector, SelectorManager 등 추가
 - ✅ **프로젝트 구조 정리** - 서브폴더 체계 구성
 - ✅ **함수 검증 시스템** 구축
 - ✅ **에러 처리 및 복구 로직** 강화
@@ -203,8 +224,9 @@ echo PW=your_certificate_password > .env
 ### 🔄 진행 중인 작업
 
 #### 📋 현재 작업: 문서화 및 정리
-- 🔄 **프로젝트 구조 정리** - 서브폴더 분류 완료
-- 🔄 **CLAUDE.md 한글 재작성** - 진행 중
+- ✅ **프로젝트 구조 정리** - 서브폴더 분류 완료
+- ✅ **CLAUDE.md 한글 재작성** - 최적화된 구조 반영 완료
+- ✅ **세금계산서 루틴.md 업데이트** - code-simplifier 결과 반영 완료
 
 ### 🎯 예정된 작업 (Priority Order)
 
