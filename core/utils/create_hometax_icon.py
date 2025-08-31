@@ -1,3 +1,5 @@
+# 📁 C:\APP\tax-bill\core\utils\create_hometax_icon.py
+# Create at 2508312118 Ver1.00
 # -*- coding: utf-8 -*-
 """
 HomeTax 아이콘 생성 (간단한 버전)

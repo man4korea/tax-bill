@@ -1,3 +1,5 @@
+<!-- 📁 C:\APP\tax-bill\core\field_mapping.md -->
+<!-- Create at 2508312118 Ver1.00 -->
 # 거래처 등록 필드 매핑표
 
 | 입력화면 라벨명 | 변수명 (UI) | Excel 열명 | HomeTax 셀렉션명 |

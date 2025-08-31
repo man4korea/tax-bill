@@ -1,3 +1,5 @@
+# 📁 C:\APP\tax-bill\core\tax-invoice\excel_data_manager.py
+# Create at 2508312118 Ver1.00
 # -*- coding: utf-8 -*-
 import pandas as pd
 import os

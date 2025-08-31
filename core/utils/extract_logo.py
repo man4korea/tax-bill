@@ -1,3 +1,5 @@
+# 📁 C:\APP\tax-bill\core\utils\extract_logo.py
+# Create at 2508312118 Ver1.00
 # -*- coding: utf-8 -*-
 """
 HomeTax 페이지에서 로고 이미지를 추출하는 스크립트

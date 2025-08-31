@@ -1,3 +1,5 @@
+# 📁 C:\APP\tax-bill\core\tax-invoice\hometax_transaction_processor.py
+# Create at 2508312118 Ver1.00
 # -*- coding: utf-8 -*-
 """
 HomeTax 거래 내역 입력 프로세스 모듈
@@ -1325,18 +1327,18 @@ async def _select_receipt_type(page, cash_amount, check_amount, note_amount, cre
     try:
         total_payment = cash_amount + check_amount + note_amount
         
-        if total_payment == 0 and credit_amount > 0:
-            # 전액 외상미수금 - 청구
+        if credit_amount > 0:
+            # 외상미수금이 0보다 크면 - 청구
             button = page.locator("#mf_txppWframe_rdoRecApeClCdTop > div.w2radio_item.w2radio_item_0 > label")
             await button.wait_for(state="visible", timeout=3000)
             await button.click()
-            print("   [REQUEST] 전액 외상미수금 - 청구 버튼 클릭 완료")
+            print(f"   [REQUEST] 외상미수금 {credit_amount:,.0f}원 - 청구 버튼 클릭 완료")
         else:
-            # 일반적인 경우 - 영수
+            # 외상미수금이 0이하인 경우 - 영수
             button = page.locator("#mf_txppWframe_rdoRecApeClCdTop > div.w2radio_item.w2radio_item_1 > label")
             await button.wait_for(state="visible", timeout=3000)
             await button.click()
-            print("   [RECEIPT] 영수 버튼 클릭 완료")
+            print("   [RECEIPT] 외상미수금 없음 - 영수 버튼 클릭 완료")
     except Exception as e:
         print(f"   [WARN] 영수/청구 버튼 클릭 실패: {e}")
         # 기본값으로 영수 버튼 시도

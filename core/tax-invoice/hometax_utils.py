@@ -1,3 +1,5 @@
+# 📁 C:\APP\tax-bill\core\tax-invoice\hometax_utils.py
+# Create at 2508312118 Ver1.00
 # -*- coding: utf-8 -*-
 """
 HomeTax 유틸리티 함수 모듈

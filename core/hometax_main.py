@@ -1,3 +1,5 @@
+# 📁 C:\APP\tax-bill\core\hometax_main.py
+# Create at 2508312118 Ver1.00
 # -*- coding: utf-8 -*-
 """
 HomeTax 전자세금계산서 시스템 - 메인 화면

@@ -1,6 +1,6 @@
-# 🏛️ 홈택스 세금계산서 자동화 시스템 v2.0
+# 🏛️ 홈택스 세금계산서 자동화 시스템 v2.3
 
-Korean HomeTax Tax Invoice Automation System - Claude Code AI 개발 가이드
+Korean HomeTax Tax Invoice Automation System - Claude Code AI 개발 가이드 (Playwright 독립 로그인 시스템)
 
 ---
 
@@ -16,69 +16,109 @@ Korean HomeTax Tax Invoice Automation System - Claude Code AI 개발 가이드
 
 **개발 환경**:
 - **언어**: Python 3.8+
-- **웹 자동화**: Playwright (권장), Selenium (레거시)
+- **웹 자동화**: Playwright 
 - **엑셀 처리**: openpyxl, xlwings, pandas
 - **UI 프레임워크**: tkinter, ttkbootstrap
 - **배포**: PyInstaller, NSIS Installer
 
 ---
 
-## 📁 프로젝트 구조
+## 📁 프로젝트 구조 (v2.3 - Playwright 통합 로그인 시스템)
 
 ```
 C:\APP\tax-bill\
-├── 📂 core/                    # 핵심 시스템 모듈 (최적화 완료)
+├── 📂 core/                    # 핵심 시스템 모듈 (Playwright 통합 완료)
 │   ├── hometax_main.py         # 메인 UI 애플리케이션
-│   ├── hometax_quick.py        # 세금계산서 자동화 엔진 (2,214줄 → 유틸리티 연동)
-│   ├── hometax_transaction_processor.py  # 거래내역 처리 모듈 (1,346줄 → 함수 분리)
-│   ├── hometax_utils.py        # 공통 유틸리티 모듈 (242줄 신규)
+│   ├── hometax_login_module.py # 🔄 공통 로그인 모듈 (독립 모듈 subprocess 방식)
+│   ├── auto-login.py           # 🆕 자동 로그인 모듈 (Playwright, 독립 실행)
+│   ├── manual-login.py         # 🆕 수동 로그인 모듈 (Playwright, 독립 실행)
+│   ├── excel_unified_processor.py # 🆕 통합 엑셀 처리 모듈 (600+줄)
+│   ├── hometax_partner_registration.py # 거래처 등록 (Playwright 통합)
 │   ├── hometax_security_manager.py # 보안 관리 모듈
 │   ├── hometax_cert_manager.py # 인증서 관리 모듈
-│   ├── excel_data_manager.py   # 엑셀 데이터 관리자
-│   └── excel_reader.py         # 엑셀 파일 리더
-│
-├── 📂 automation/              # 자동화 모듈
-│   ├── hometax_customer.py     # 거래처 등록 자동화
-│   ├── hometax_partner_input.py # 거래처 입력 처리
-│   ├── hometax_excel_integration.py # 엑셀 연동
-│   └── hometax_tax_invoice_automation.py # 세금계산서 자동화
-│
-├── 📂 utils/                   # 유틸리티 및 리소스
-│   ├── tax_invoice_generator.py # 세금계산서 생성기
-│   ├── create_hometax_icon.py  # 아이콘 생성 도구
-│   ├── extract_logo.py         # 로고 추출 도구
-│   ├── hometax_icon.ico        # 애플리케이션 아이콘
-│   ├── hometax_logo.png        # 홈택스 로고
-│   └── auto_login_error.png    # 오류 스크린샷
+│   ├── field_mapping.md        # 필드 매핑 문서
+│   ├── requirements.txt        # Python 의존성 패키지 목록
+│   │
+│   ├── 📂 tax-invoice/         # 세금계산서 전용 모듈
+│   │   ├── hometax_tax_invoice.py # 세금계산서 자동화 (2200+줄 → 통합 모듈 사용)
+│   │   ├── excel_data_manager.py # 엑셀 데이터 관리자
+│   │   ├── excel_reader.py     # 엑셀 파일 리더
+│   │   ├── hometax_transaction_processor.py # 거래내역 처리 모듈
+│   │   ├── hometax_utils.py    # 세금계산서 전용 유틸리티
+│   │   └── README.md          # 세금계산서 모듈 설명서
+│   │
+│   └── 📂 utils/               # 유틸리티 및 리소스
+│       ├── create_hometax_icon.py # 아이콘 생성 도구
+│       ├── extract_logo.py     # 로고 추출 도구
+│       ├── hometax_icon.ico    # 애플리케이션 아이콘
+│       ├── hometax_logo.png    # 홈택스 로고
+│       └── auto_login_error.png # 오류 스크린샷
 │
 ├── 📂 tests/                   # 테스트 파일
 │   ├── test_functions.py       # 함수 검증 테스트
-│   └── check_data_rows.py      # 데이터 검증 테스트
+│   ├── check_data_rows.py      # 데이터 검증 테스트
+│   ├── test_magicline_detection.py # 매직라인 감지 테스트
+│   └── 📂 archive/             # 레거시 테스트 파일
+│       ├── hometax_customer.py # 거래처 관련 레거시
+│       ├── hometax_partner_input.py # 파트너 입력 레거시
+│       ├── hometax_tax_invoice_automation.py # 세금계산서 레거시
+│       └── README.md          # 아카이브 설명서
 │
 ├── 📂 deployment/              # 배포 관련 파일
 │   ├── build_single_exe.bat    # 단일 실행파일 빌드
 │   ├── build_standalone.bat    # 독립실행형 빌드
 │   ├── build_installer.bat     # 인스톨러 빌드
-│   ├── build_app.spec          # PyInstaller 설정
-│   ├── installer.nsi           # NSIS 인스톨러 스크립트
 │   ├── install.bat             # Windows 설치 스크립트
-│   ├── install.sh              # Linux 설치 스크립트
+│   ├── install_nsis.bat        # NSIS 설치 스크립트
 │   ├── license_system.py       # 라이선스 시스템
 │   └── LICENSE.txt             # 라이선스 파일
 │
 ├── 📂 docs/                    # 문서 및 가이드
 │   ├── DEPLOYMENT_GUIDE.md     # 배포 가이드
 │   ├── ONLINE_LICENSE_SERVER_GUIDE.md # 온라인 라이선스 서버 가이드
-│   ├── field_mapping.md        # 필드 매핑 문서
+│   ├── CERT_MANAGER_GUIDE.md   # 인증서 관리 가이드
 │   └── GEMINI.md              # Gemini AI 가이드 (템플릿)
 │
-├── requirements.txt           # Python 의존성
-├── .env                      # 인증서 비밀번호 (PW=your_password)
-└── CLAUDE.md                 # 본 파일 - AI 개발 가이드
+├── README.md                   # 프로젝트 메인 README
+└── CLAUDE.md                   # 본 파일 - AI 개발 가이드
+```
+## 표준 헤더 적용 지침
+
+### 파일 헤더 형식
+```
+# 📁 C:\APP\tax-bill\[경로]\[파일명]
+# Create at YYMMDDhhmm Ver1.00
 ```
 
-## 세금계산서 루틴은 "C:\APP\tax-bill\docs\세금계산서 루틴.md" 참고
----
+### 파일별 주석 형식
+- **Python**: `# 헤더`
+- **HTML/XML**: `<!-- 헤더 -->`
+- **JavaScript/CSS**: `// 헤더`
+- **SQL**: `-- 헤더`
+- **Markdown**: `<!-- 헤더 -->`
+
+### 헤더 업데이트 규칙
+파일 변경 시 헤더에 Update 라인 추가 (JSON 파일 제외):
+```
+# 📁 C:\APP\tax-bill\[경로]\[파일명]
+# Create at YYMMDDhhmm Ver1.00
+# Update at YYMMDDhhmm Ver1.01
+```
+
+### 버전 관리
+- **초기 생성**: Ver1.00
+- **마이너 수정**: Ver1.01, Ver1.02...
+- **메이저 변경**: Ver2.00, Ver3.00...
+
+### 시간 형식
+- **형식**: `YYMMDDhhmm` (연월일시분, 한국시간 기준)
+- **확인 원칙**: 반드시 `date "+%Y년 %m월 %d일 %H시 %M분"` 명령어로 실시간 확인
+- **중요**: 추측이나 대략적인 시간 사용 금지, 매번 실제 명령어 실행
+- **AI 주의사항**: Claude는 실시간을 알 수 없으므로 반드시 Bash 도구로 `date` 명령어 실행 후 시간 확인
+- **위반 사례**: 추측으로 작성하면 잘못된 시간이 기록됨 (예: 실제 21:42인데 15:50으로 잘못 기록)
+
+### 제외 파일
+- JSON, 바이너리, 자동 생성 파일
 
 ## 🚀 실행 방법
 
@@ -88,24 +128,23 @@ cd C:\APP\tax-bill
 python core/hometax_main.py
 ```
 
-### 2. 빠른 세금계산서 자동화
+### 2. 세금계산서 자동화 (통합 모듈 사용)
 ```bash
-# 추천 - 가장 안정적인 버전
-python core/hometax_quick.py
+# 세금계산서 자동화 시스템 (새로운 통합 모듈)
+python core/tax-invoice/hometax_tax_invoice.py
 ```
 
-### 3. 거래처 등록 자동화
+### 3. 거래처 등록 자동화 (통합 모듈 사용)
 ```bash
-python automation/hometax_customer.py
+# 거래처 등록 자동화 (새로운 통합 모듈)
+python core/hometax_partner_registration.py
 ```
 
-### 4. 테스트 실행
+### 4. 로그인 노트북 실행 (개별 테스트)
 ```bash
-# 함수 검증 테스트
-python tests/test_functions.py
 
-# 데이터 검증 테스트  
-python tests/check_data_rows.py
+# 로그인 모듈 테스트
+python core/hometax_login_module.py
 ```
 
 ### 5. 배포용 실행파일 생성
@@ -119,167 +158,112 @@ deployment/build_standalone.bat
 # 인스톨러 생성 (NSIS 필요)
 deployment/build_installer.bat
 ```
-
----
-
 ## 🔧 개발 환경 설정
 
 ### 필수 의존성 설치
 ```bash
-# 기본 의존성
-pip install -r requirements.txt
+# 기본 의존성 (중복 파일 정리 완료)
+pip install -r core/requirements.txt
 
 # Playwright 설치 (권장)
 pip install playwright python-dotenv openpyxl xlwings pandas ttkbootstrap
 playwright install chromium
 
-# Selenium 설치 (레거시 지원)  
-pip install selenium python-dotenv
-# Chrome WebDriver 별도 설치 필요
-```
-
-### 환경 설정
-```bash
-# .env 파일 생성
-echo PW=your_certificate_password > .env
-```
-
 ---
 
 ## 🏗️ 시스템 아키텍처
 
-### 최적화된 핵심 모듈 관계도 (code-simplifier 에이전트 적용)
+### 통합 모듈 아키텍처 (v2.3 - Playwright 독립 로그인 시스템)
 ```
 [hometax_main.py] - 메인 UI 애플리케이션
          │
-         └─► [hometax_quick.py] - 세금계산서 자동화 엔진 (최적화)
+         ├─► [hometax_partner_registration.py] - 거래처 등록 (Playwright 통합)
+         │            │
+         │            ├─► [hometax_login_module.py] - 🔄 공통 로그인 디스패처
+         │            │    ├── hometax_login_dispatcher() (분기 처리)
+         │            │    ├── subprocess.run("auto-login.py") - 독립 프로세스 실행
+         │            │    ├── subprocess.run("manual-login.py") - 독립 프로세스 실행
+         │            │    └── _fallback_manual_login() - 기존 방식 fallback
+         │            │
+         │            ├─► [auto-login.py] - 🆕 독립 자동 로그인 모듈 (Playwright)
+         │            ├─► [manual-login.py] - 🆕 독립 수동 로그인 모듈 (Playwright)
+         │            │
+         │            └─► [excel_unified_processor.py] (파트너 시트)
+         │                         │
+         │                         ├── ExcelUnifiedProcessor (600+줄 통합 모듈)
+         │                         ├── ExcelFileManager (3단계 파일 열기)
+         │                         ├── RowSelector (GUI 기반 행 선택)
+         │                         ├── DataProcessor (데이터 가공)
+         │                         └── StatusRecorder (상태 기록)
+         │
+         └─► [tax-invoice/hometax_tax_invoice.py] - 세금계산서 (Playwright 통합)
                       │
-                      ├─► [hometax_utils.py] - 공통 유틸리티 (신규)
-                      │    ├── FieldCollector (홈택스 필드 수집)
-                      │    ├── SelectorManager (셀렉터 관리)
-                      │    ├── MenuNavigator (메뉴 네비게이션)
-                      │    ├── DialogHandler (팝업 처리)
-                      │    └── format functions (데이터 형식 변환)
+                      ├─► [excel_unified_processor.py] (거래명세표 시트)
+                      ├─► [hometax_login_module.py] - 🔄 공통 로그인 디스패처
+                      │    ├── 독립 모듈 subprocess 실행
+                      │    └── 로그인 상태 확인 및 콜백 처리
                       │
-                      ├─► [hometax_transaction_processor.py] - 거래내역 처리 (함수 분리)
-                      │    ├── process_transaction_details() (메인 프로세스)
-                      │    ├── check_and_update_supply_date() (3개 헬퍼로 분리)
-                      │    ├── input_single_transaction_item() (4개 함수로 분할)
-                      │    └── finalize_transaction_summary() (3개 함수로 분할)
+                      ├─► [auto-login.py] - 독립 자동 로그인 (Playwright)
+                      ├─► [manual-login.py] - 독립 수동 로그인 (Playwright)
+                      ├─► [partner-menu-navigation.ipynb] - 알림창 처리 (Selenium)
                       │
+                      ├─► [hometax_utils.py] - 공통 유틸리티
+                      │    ├── FieldCollector, SelectorManager, MenuNavigator
+                      │    ├── DialogHandler, format functions
+                      │    └── 242줄 유틸리티 함수들
+                      │
+                      ├─► [hometax_transaction_processor.py] - 거래내역 처리
                       ├─► [hometax_security_manager.py] - 보안 관리
-                      ├─► [hometax_cert_manager.py] - 인증서 관리
-                      └─► [excel_data_manager.py] - 엑셀 데이터 관리
-                               │
-                               └─► [excel_reader.py] - 엑셀 파일 읽기
+                      └─► [hometax_cert_manager.py] - 인증서 관리
 ```
 
-### 자동화 워크플로우
-1. **로그인 단계**: 홈택스 인증서 자동 로그인
-2. **데이터 로드**: 엑셀 파일에서 거래 데이터 읽기
-3. **거래처 처리**: 거래처별 데이터 그룹핑 및 검증
-4. **세금계산서 작성**: 홈택스 폼에 자동 입력
-5. **발급 처리**: 세금계산서 발급보류 또는 즉시발급
-6. **결과 기록**: 엑셀 시트에 처리 결과 기록
+### Playwright 독립 로그인 플로우 (v2.3 - 신규)
+```
+hometax_login_dispatcher(callback_function)
+├── 환경변수 확인 (.env HOMETAX_LOGIN_MODE)
+├── 홈택스 페이지 열기 (Playwright)
+├── 로그인 모드 분기
+│   ├── auto: hometax_auto_login()
+│   │   ├── subprocess.run("auto-login.py") - 독립 프로세스 실행
+│   │   ├── auto_login_with_playwright() 함수 실행
+│   │   ├── Playwright 브라우저 독립 실행
+│   │   ├── 자동 인증서 비밀번호 입력 및 로그인
+│   │   └── 기존 브라우저에서 로그인 상태 확인
+│   └── manual: hometax_manual_login()
+│       ├── subprocess.run("manual-login.py") - 독립 프로세스 실행
+│       ├── manual_login_with_playwright() 함수 실행
+│       ├── 1단계: 홈택스 페이지 열기 (Playwright)
+│       ├── 1.5단계: 확인/취소 버튼 메시지박스 (tkinter)
+│       ├── 2단계: 공동·금융인증서 버튼 클릭
+│       ├── 3단계: 공인인증서 비밀번호 자동 입력 (선택적)
+│       ├── 4단계: 확인 버튼 클릭 또는 수동 로그인 대기
+│       ├── 5단계: URL 변화 감지로 로그인 완료 확인 (5분)
+│       └── Fallback: _fallback_manual_login() 기존 방식
+└── 로그인 완료 후 → callback_function(page, browser) 실행
+```
+
+### 통합 자동화 워크플로우 (v2.3 - Playwright 독립 모듈)
+1. **독립 로그인**: `hometax_login_module.py` → `.py` 독립 프로세스로 로그인 처리
+2. **통합 엑셀 처리**: `excel_unified_processor.py`로 데이터 로드
+3. **3단계 파일 열기**: 열린 파일 확인 → 문서 폴더 → 파일 다이얼로그
+4. **GUI 행 선택**: tkinter 기반 사용자 친화적 선택
+5. **데이터 처리**: 
+   - 거래처 등록: 거래처 시트 처리 → 홈택스 등록
+   - 세금계산서: 거래명세표 시트 처리 → 세금계산서 작성
+6. **결과 기록**: 통합 상태 기록 시스템 (xlwings + openpyxl 듀얼 지원)
+
+### 독립 모듈 시스템 특징 (v2.3)
+- **독립 프로세스 실행**: subprocess.run()으로 완전 분리된 모듈 실행
+- **모듈 간 의존성 제거**: auto-login.py, manual-login.py 완전 독립
+- **Playwright 통일**: 모든 웹 자동화 Playwright로 통합 (Selenium은 특수 용도)
+- **에러 처리**: 독립 모듈 실패 시 fallback 시스템
+- **세션 연속성**: 로그인 완료 후 기존 브라우저에서 상태 확인
+- **테스트 도구**: `test_python_execution()` 함수로 의존성 및 파일 확인
 
 ---
+
 
 ## 📊 TODO 작업 계획 및 완료 현황
-
-### ✅ 완료된 작업 (2024.08.25-28)
-
-#### 🎯 Phase 1: 핵심 시스템 구축
-- ✅ **홈택스 로그인 자동화** (Playwright 기반)
-- ✅ **엑셀 데이터 처리 엔진** 구현
-- ✅ **세금계산서 자동 작성 기능** 완성
-- ✅ **거래내역 상세 입력 프로세스** 구현
-  - 공급일자 년월 비교 및 자동 변경 (5회 beep 알림)
-  - 거래 수량별 처리 (1-4건: 기본, 5-16건: 확장, 16+건: 분할)
-  - 합계 검증 및 외상미수금 자동 계산
-  - 금액 불일치 시 연속 beep 알림 및 사용자 수정 대기
-
-#### 🔧 Phase 2: 시스템 최적화 (code-simplifier 에이전트 완료)
-- ✅ **코드 모듈화 및 간소화** - code-simplifier 에이전트 활용
-  - `hometax_utils.py` 신규 생성 (242줄) - 공통 기능 분리
-  - `hometax_transaction_processor.py` 함수 분리 (1,346줄 최적화)
-  - `hometax_quick.py` 유틸리티 연동 (2,214줄 구조 개선)
-- ✅ **중복 코드 제거** - 토큰 효율성 대폭 향상
-- ✅ **클래스 기반 구조** - FieldCollector, SelectorManager 등 추가
-- ✅ **프로젝트 구조 정리** - 서브폴더 체계 구성
-- ✅ **함수 검증 시스템** 구축
-- ✅ **에러 처리 및 복구 로직** 강화
-
-#### 🎨 Phase 3: UI/UX 개선
-- ✅ **메인 UI 애플리케이션** (tkinter + ttkbootstrap)
-- ✅ **진행 상황 표시** 및 로깅 시스템
-- ✅ **사용자 알림 시스템** (beep 음성 알림)
-- ✅ **폼 필드 초기화** 자동 처리
-
-#### 🚀 Phase 4: 배포 시스템
-- ✅ **PyInstaller 빌드 설정** 구성
-- ✅ **NSIS 인스톨러** 스크립트 작성
-- ✅ **라이선스 시스템** 기본 구조
-- ✅ **배포 자동화** 스크립트
-
-### 🔄 진행 중인 작업
-
-#### 📋 현재 작업: 문서화 및 정리
-- ✅ **프로젝트 구조 정리** - 서브폴더 분류 완료
-- ✅ **CLAUDE.md 한글 재작성** - 최적화된 구조 반영 완료
-- ✅ **세금계산서 루틴.md 업데이트** - code-simplifier 결과 반영 완료
-
-### 🎯 예정된 작업 (Priority Order)
-
-#### 🔥 High Priority
-- 📝 **사용자 매뉴얼 작성** (한글)
-- 🧪 **통합 테스트 스위트** 구축
-- 🛡️ **오류 처리 강화** (네트워크 오류, 페이지 변경 등)
-- ⚡ **성능 최적화** (대용량 엑셀 처리)
-
-#### 🔸 Medium Priority  
-- 🎛️ **설정 파일 시스템** 구축
-- 📊 **상세 로그 및 리포트** 기능
-- 🔄 **자동 업데이트** 시스템
-- 💾 **데이터 백업 및 복구** 기능
-
-#### 🔹 Low Priority
-- 🌐 **웹 기반 UI** 개발 검토
-- 📱 **모바일 지원** 검토
-- 🔗 **다른 세무 시스템 연동** 검토
-- 🤖 **AI 기반 데이터 검증** 기능
-
----
-
-## 🐛 알려진 이슈 및 해결 방법
-
-### 🚨 중요 이슈
-1. **인증서 비밀번호 보안**
-   - `.env` 파일 보안 관리 필요
-   - 배포 시 민감정보 제외 처리
-
-2. **홈택스 페이지 구조 변경**
-   - iframe 구조 변경 시 selector 업데이트 필요
-   - 필드명 변경 대응 필요
-
-### 🔧 해결 완료된 이슈
-- ✅ **작성일자 컬럼 없음 오류** - 다중 컬럼명 fallback 로직 구현
-- ✅ **합계금액 input_value 오류** - 다중 방법 시도 로직 구현  
-- ✅ **거래내역 입력 불가** - 필드 매핑 개선
-- ✅ **폼 필드 미초기화** - 자동 초기화 루틴 추가
-
----
-
-## 🔐 보안 고려사항
-
-### 인증 정보 관리
-- **인증서 비밀번호**: `.env` 파일에 암호화하여 저장
-- **세션 관리**: 브라우저 세션 자동 종료
-- **로그 보안**: 민감정보 로그 기록 방지
-
-### 데이터 보호
-- **엑셀 파일**: 읽기 전용 모드로 접근
-- **임시 파일**: 작업 완료 후 자동 삭제
-- **오류 로그**: 개인정보 마스킹 처리
 
 ---
 
@@ -287,8 +271,8 @@ echo PW=your_certificate_password > .env
 
 ### 개발 관련 문의
 - **개발자**: Claude AI Assistant
-- **개발 기간**: 2024.08.25 - 2024.08.28
-- **버전**: v2.0 (모듈화 완료)
+- **개발 기간**: 2024.08.25 - 2024.08.30
+- **버전**: v2.1 (통합 모듈화 완료)
 
 ### 기술 지원
 - **GitHub Issues**: [프로젝트 저장소 이슈 탭]
@@ -306,5 +290,5 @@ echo PW=your_certificate_password > .env
 
 ---
 
-*마지막 업데이트: 2024년 8월 28일*
-*문서 버전: v2.0*
+*마지막 업데이트: 2024년 8월 31일*
+*문서 버전: v2.3 (Playwright 독립 로그인 시스템)*

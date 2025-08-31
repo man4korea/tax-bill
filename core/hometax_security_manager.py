@@ -1,3 +1,5 @@
+# 📁 C:\APP\tax-bill\core\hometax_security_manager.py
+# Create at 2508312118 Ver1.00
 # -*- coding: utf-8 -*-
 """
 HomeTax 보안 관리 시스템
